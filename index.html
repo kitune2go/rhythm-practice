@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#111827" />
+  <meta name="theme-color" content="#0b1020" />
   <title>Rhythm Practice</title>
   <style>
     :root {
@@ -14,151 +14,228 @@
       --panel2: #1e293b;
       --text: #f8fafc;
       --muted: #94a3b8;
-      --accent: #38bdf8;
-      --on: #22c55e;
+      --event: #166534;
       --now: #f59e0b;
-      --danger: #ef4444;
+      --line: #475569;
     }
 
     * { box-sizing: border-box; }
-    body {
+
+    html, body {
       margin: 0;
+      width: 100%;
+      min-height: 100%;
+      overflow-x: hidden;
       background: linear-gradient(180deg, #0b1020, #111827);
       color: var(--text);
+    }
+
+    body {
       min-height: 100svh;
     }
 
     .app {
-      width: min(100%, 860px);
+      width: 100%;
+      max-width: 760px;
       margin: 0 auto;
-      padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+      padding:
+        max(12px, env(safe-area-inset-top))
+        max(10px, env(safe-area-inset-right))
+        max(20px, env(safe-area-inset-bottom))
+        max(10px, env(safe-area-inset-left));
     }
 
-    h1 { font-size: 1.5rem; margin: 0 0 4px; }
-    .sub { color: var(--muted); margin-bottom: 18px; }
+    h1 {
+      font-size: clamp(1.25rem, 5vw, 1.6rem);
+      margin: 0 0 3px;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: .9rem;
+      margin-bottom: 12px;
+    }
 
     .panel {
-      background: rgba(21, 28, 49, .94);
+      width: 100%;
+      min-width: 0;
+      background: rgba(21, 28, 49, .96);
       border: 1px solid rgba(148,163,184,.18);
-      border-radius: 18px;
-      padding: 16px;
-      box-shadow: 0 12px 32px rgba(0,0,0,.22);
-      margin-bottom: 14px;
+      border-radius: 16px;
+      padding: 13px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.2);
+      margin-bottom: 12px;
+      overflow: hidden;
     }
 
     .controls {
       display: grid;
-      gap: 14px;
+      gap: 12px;
+    }
+
+    .status {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: .86rem;
     }
 
     .tempo-row {
       display: grid;
-      grid-template-columns: 1fr 92px;
-      gap: 12px;
+      grid-template-columns: minmax(0, 1fr) 72px;
+      gap: 8px;
       align-items: center;
+      margin-top: 5px;
     }
 
-    input[type="range"] { width: 100%; }
+    input[type="range"] {
+      width: 100%;
+      min-width: 0;
+    }
+
     input[type="number"] {
       width: 100%;
-      font-size: 1.05rem;
-      padding: 10px 12px;
-      border-radius: 12px;
+      min-width: 0;
+      font-size: 1rem;
+      padding: 9px 8px;
+      border-radius: 10px;
       border: 1px solid #334155;
       background: #0f172a;
       color: var(--text);
+      text-align: center;
     }
 
     .buttons {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 8px;
     }
 
     button {
-      min-height: 52px;
+      width: 100%;
+      min-width: 0;
+      min-height: 48px;
       border: 0;
-      border-radius: 14px;
+      border-radius: 12px;
       font-size: 1rem;
-      font-weight: 700;
+      font-weight: 750;
       color: white;
       background: #2563eb;
+      touch-action: manipulation;
     }
 
     button.stop { background: #b91c1c; }
-    button:disabled { opacity: .45; }
-
-    .status {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      color: var(--muted);
-      font-size: .92rem;
-    }
+    button:disabled { opacity: .42; }
 
     .beat {
-      font-size: 2.2rem;
-      font-weight: 800;
+      font-size: clamp(2rem, 10vw, 2.8rem);
+      font-weight: 850;
       text-align: center;
-      letter-spacing: .04em;
-      margin: 6px 0 2px;
+      line-height: 1;
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
     }
 
-    .grid-wrap {
-      overflow-x: auto;
-      padding-bottom: 4px;
+    .board {
+      width: 100%;
+      min-width: 0;
     }
 
-    .rhythm-grid {
-      min-width: 680px;
+    .ruler,
+    .part-row {
       display: grid;
-      grid-template-columns: 120px repeat(24, 1fr);
-      gap: 5px;
+      grid-template-columns: clamp(52px, 18vw, 78px) minmax(0, 1fr);
+      gap: 7px;
       align-items: center;
     }
 
-    .label {
+    .ruler {
+      margin-bottom: 6px;
+    }
+
+    .ruler-label {
+      color: var(--muted);
+      font-size: .72rem;
+    }
+
+    .beat-ruler {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 3px;
+      text-align: center;
+      color: #cbd5e1;
+      font-size: .72rem;
       font-weight: 700;
+    }
+
+    .part-row + .part-row {
+      margin-top: 7px;
+    }
+
+    .part-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: #e2e8f0;
-      position: sticky;
-      left: 0;
-      z-index: 2;
-      background: var(--panel);
-      padding-right: 6px;
+      font-weight: 750;
+      font-size: clamp(.72rem, 3.2vw, .9rem);
+    }
+
+    .steps {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(24, minmax(0, 1fr));
+      gap: 2px;
     }
 
     .cell {
-      aspect-ratio: 1 / 1;
-      border-radius: 7px;
+      min-width: 0;
+      height: clamp(13px, 4.4vw, 23px);
+      border-radius: 3px;
       background: #263248;
-      border: 1px solid rgba(255,255,255,.05);
-      transition: transform .05s ease, background .05s ease;
+      border: 1px solid rgba(255,255,255,.04);
+      transition: background .035s linear, transform .035s linear;
     }
 
-    .cell.event { background: #166534; }
-    .cell.now { outline: 2px solid var(--now); transform: scale(1.12); }
-    .cell.event.now { background: #f59e0b; }
+    .cell:nth-child(6n + 1) {
+      box-shadow: inset 2px 0 0 var(--line);
+    }
 
-    .barline {
-      box-shadow: inset 2px 0 0 rgba(148,163,184,.65);
+    .cell.event {
+      background: var(--event);
+    }
+
+    .cell.now {
+      outline: 2px solid var(--now);
+      outline-offset: -1px;
+      transform: scaleY(1.12);
+      z-index: 1;
+    }
+
+    .cell.event.now {
+      background: var(--now);
     }
 
     .legend {
-      margin-top: 12px;
-      color: var(--muted);
-      font-size: .9rem;
-      line-height: 1.6;
-    }
-
-    .tiny {
-      margin-top: 8px;
+      margin-top: 11px;
       color: var(--muted);
       font-size: .8rem;
+      line-height: 1.55;
     }
 
-    @media (max-width: 520px) {
-      .tempo-row { grid-template-columns: 1fr 78px; }
-      .panel { border-radius: 14px; padding: 14px; }
+    .sync-note {
+      margin-top: 6px;
+      color: #cbd5e1;
+      font-size: .72rem;
+    }
+
+    @media (max-width: 360px) {
+      .panel { padding: 10px; }
+      .part-label { font-size: .68rem; }
+      .steps { gap: 1px; }
+      .cell { border-radius: 2px; }
     }
   </style>
 </head>
@@ -192,13 +269,19 @@
     </section>
 
     <section class="panel">
-      <div class="grid-wrap">
-        <div class="rhythm-grid" id="rhythmGrid"></div>
+      <div class="board" id="board">
+        <div class="ruler">
+          <div class="ruler-label">PART</div>
+          <div class="beat-ruler">
+            <span>1</span><span>2</span><span>3</span><span>4</span>
+          </div>
+        </div>
       </div>
+
       <div class="legend">
-        Voice = 4分音符 ／ Right Hand = 8分音符 ／ Left Hand = 2拍3連 ／ Foot = 2分音符
+        Voice = 4分 ／ R.Hand = 8分 ／ L.Hand = 2拍3連 ／ Foot = 2分
       </div>
-      <div class="tiny">1拍を6分割し、24ステップで1小節を表現しています。</div>
+      <div class="sync-note">表示は音声と同じ AudioContext の時刻を参照して追従します。</div>
     </section>
   </main>
 
@@ -207,10 +290,10 @@
     const STEPS_PER_BAR = 24;
 
     const parts = [
-      { key: "voice", label: "Voice", freq: 880, gain: 0.11, events: [0, 6, 12, 18] },
-      { key: "right", label: "Right Hand", freq: 660, gain: 0.09, events: [0, 3, 6, 9, 12, 15, 18, 21] },
-      { key: "left", label: "Left Hand", freq: 440, gain: 0.09, events: [0, 4, 8, 12, 16, 20] },
-      { key: "foot", label: "Foot", freq: 180, gain: 0.16, events: [0, 12] }
+      { key: "voice", label: "Voice", freq: 920, gain: 0.095, duration: 0.030, events: [0, 6, 12, 18] },
+      { key: "right", label: "R.Hand", freq: 690, gain: 0.085, duration: 0.026, events: [0, 3, 6, 9, 12, 15, 18, 21] },
+      { key: "left", label: "L.Hand", freq: 460, gain: 0.085, duration: 0.032, events: [0, 4, 8, 12, 16, 20] },
+      { key: "foot", label: "Foot", freq: 150, gain: 0.15, duration: 0.060, events: [0, 12] }
     ];
 
     const bpmRange = document.getElementById("bpmRange");
@@ -220,148 +303,188 @@
     const stopBtn = document.getElementById("stopBtn");
     const beatDisplay = document.getElementById("beatDisplay");
     const stateText = document.getElementById("stateText");
-    const rhythmGrid = document.getElementById("rhythmGrid");
+    const board = document.getElementById("board");
 
     let audioCtx = null;
     let running = false;
-    let currentStep = 0;
+    let nextStep = 0;
     let nextNoteTime = 0;
     let schedulerId = null;
-    const lookaheadMs = 25;
-    const scheduleAheadSec = 0.12;
-    const visualTimers = [];
+    let rafId = null;
 
-    function clampBpm(v) {
-      const n = Number(v);
+    // 音の予約時刻と表示を同じ時計で同期するための短いキュー
+    const visualQueue = [];
+    let shownStep = -1;
+
+    const lookaheadMs = 20;
+    const scheduleAheadSec = 0.10;
+
+    function clampBpm(value) {
+      const n = Number(value);
       if (!Number.isFinite(n)) return 60;
       return Math.min(180, Math.max(40, Math.round(n)));
     }
 
-    function setBpm(v) {
-      const bpm = clampBpm(v);
+    function setBpm(value) {
+      const bpm = clampBpm(value);
       bpmRange.value = bpm;
       bpmNumber.value = bpm;
       bpmLabel.textContent = bpm;
     }
 
     bpmRange.addEventListener("input", e => setBpm(e.target.value));
-    bpmNumber.addEventListener("change", e => setBpm(e.target.value));
+    bpmNumber.addEventListener("input", e => setBpm(e.target.value));
 
-    function buildGrid() {
-      rhythmGrid.innerHTML = "";
-
+    function buildBoard() {
       for (const part of parts) {
+        const row = document.createElement("div");
+        row.className = "part-row";
+
         const label = document.createElement("div");
-        label.className = "label";
+        label.className = "part-label";
         label.textContent = part.label;
-        rhythmGrid.appendChild(label);
+
+        const steps = document.createElement("div");
+        steps.className = "steps";
 
         for (let step = 0; step < STEPS_PER_BAR; step++) {
           const cell = document.createElement("div");
           cell.className = "cell";
           if (part.events.includes(step)) cell.classList.add("event");
-          if (step % 6 === 0) cell.classList.add("barline");
-          cell.dataset.part = part.key;
           cell.dataset.step = String(step);
-          rhythmGrid.appendChild(cell);
+          cell.dataset.part = part.key;
+          steps.appendChild(cell);
         }
+
+        row.appendChild(label);
+        row.appendChild(steps);
+        board.appendChild(row);
       }
     }
 
-    function clearHighlight() {
-      document.querySelectorAll(".cell.now").forEach(el => el.classList.remove("now"));
-      beatDisplay.textContent = "—";
+    function secondsPerStep() {
+      return (60 / clampBpm(bpmNumber.value)) / STEPS_PER_BEAT;
     }
 
-    function highlightStep(step) {
-      document.querySelectorAll(".cell.now").forEach(el => el.classList.remove("now"));
-      document.querySelectorAll('[data-step="' + step + '"]').forEach(el => el.classList.add("now"));
-      beatDisplay.textContent = String(Math.floor(step / STEPS_PER_BEAT) + 1);
-    }
-
-    function clickAt(time, freq, gainValue, duration = 0.035) {
+    function makeClick(time, part) {
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
 
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, time);
+      osc.type = part.key === "foot" ? "sine" : "triangle";
+      osc.frequency.setValueAtTime(part.freq, time);
 
       gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.exponentialRampToValueAtTime(gainValue, time + 0.003);
-      gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+      gain.gain.exponentialRampToValueAtTime(part.gain, time + 0.0025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, time + part.duration);
 
       osc.connect(gain);
       gain.connect(audioCtx.destination);
 
       osc.start(time);
-      osc.stop(time + duration + 0.01);
+      osc.stop(time + part.duration + 0.012);
     }
 
     function scheduleStep(step, time) {
       for (const part of parts) {
         if (part.events.includes(step)) {
-          clickAt(time, part.freq, part.gain, part.key === "foot" ? 0.055 : 0.035);
+          makeClick(time, part);
         }
       }
-
-      const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
-      const id = setTimeout(() => {
-        if (running) highlightStep(step);
-      }, delay);
-      visualTimers.push(id);
-    }
-
-    function secondsPerStep() {
-      const bpm = clampBpm(bpmNumber.value);
-      return (60 / bpm) / STEPS_PER_BEAT;
+      visualQueue.push({ step, time });
     }
 
     function scheduler() {
-      while (running && nextNoteTime < audioCtx.currentTime + scheduleAheadSec) {
-        scheduleStep(currentStep, nextNoteTime);
+      if (!running || !audioCtx) return;
+
+      while (nextNoteTime < audioCtx.currentTime + scheduleAheadSec) {
+        scheduleStep(nextStep, nextNoteTime);
         nextNoteTime += secondsPerStep();
-        currentStep = (currentStep + 1) % STEPS_PER_BAR;
+        nextStep = (nextStep + 1) % STEPS_PER_BAR;
       }
+    }
+
+    function renderStep(step) {
+      if (step === shownStep) return;
+
+      document.querySelectorAll(".cell.now").forEach(el => el.classList.remove("now"));
+      document.querySelectorAll('[data-step="' + step + '"]').forEach(el => el.classList.add("now"));
+
+      beatDisplay.textContent = String(Math.floor(step / STEPS_PER_BEAT) + 1);
+      shownStep = step;
+    }
+
+    function visualLoop() {
+      if (!running || !audioCtx) return;
+
+      const now = audioCtx.currentTime;
+
+      // 予約された音の実時刻を越えた時点でのみ画面を進める
+      while (visualQueue.length && visualQueue[0].time <= now) {
+        const item = visualQueue.shift();
+        renderStep(item.step);
+      }
+
+      rafId = requestAnimationFrame(visualLoop);
+    }
+
+    function clearVisuals() {
+      visualQueue.length = 0;
+      shownStep = -1;
+      document.querySelectorAll(".cell.now").forEach(el => el.classList.remove("now"));
+      beatDisplay.textContent = "—";
     }
 
     async function start() {
       if (running) return;
 
       if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+          latencyHint: "interactive"
+        });
       }
+
       if (audioCtx.state === "suspended") {
         await audioCtx.resume();
       }
 
       running = true;
-      currentStep = 0;
+      clearVisuals();
+
+      nextStep = 0;
       nextNoteTime = audioCtx.currentTime + 0.08;
+
       startBtn.disabled = true;
       stopBtn.disabled = false;
       stateText.textContent = "再生中";
 
       scheduler();
       schedulerId = setInterval(scheduler, lookaheadMs);
+      rafId = requestAnimationFrame(visualLoop);
     }
 
     function stop() {
       running = false;
-      if (schedulerId) {
+
+      if (schedulerId !== null) {
         clearInterval(schedulerId);
         schedulerId = null;
       }
-      while (visualTimers.length) clearTimeout(visualTimers.pop());
+
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
       startBtn.disabled = false;
       stopBtn.disabled = true;
       stateText.textContent = "停止中";
-      clearHighlight();
+      clearVisuals();
     }
 
     startBtn.addEventListener("click", start);
     stopBtn.addEventListener("click", stop);
 
-    buildGrid();
+    buildBoard();
     setBpm(60);
   </script>
 </body>
