@@ -93,6 +93,128 @@
       font-size: .78rem;
       line-height: 1.5;
     }
+    .fun-toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+    .view-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+    }
+    .view-toggle,
+    .ghost-toggle {
+      min-height: 42px;
+      padding: 6px;
+      background: #334155;
+      color: #cbd5e1;
+      font-size: .82rem;
+      border: 1px solid rgba(148,163,184,.18);
+    }
+    .view-toggle.active {
+      background: #075985;
+      color: white;
+      border-color: #38bdf8;
+    }
+    .ghost-toggle.active {
+      background: #6d28d9;
+      color: white;
+      border-color: #a78bfa;
+    }
+    .ghost-status {
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      padding: 7px 9px;
+      margin-bottom: 9px;
+      border-radius: 10px;
+      background: #0f172a;
+      color: #cbd5e1;
+      font-size: .74rem;
+      line-height: 1.4;
+    }
+    .view-surface.hidden {
+      display: none;
+    }
+    .orbit-wrap {
+      width: 100%;
+      display: grid;
+      place-items: center;
+      padding: 3px 0;
+    }
+    .orbit-svg {
+      width: min(100%, 430px);
+      height: auto;
+      aspect-ratio: 1 / 1;
+      display: block;
+    }
+    .orbit-ring {
+      fill: none;
+      stroke: #334155;
+      stroke-width: 1.4;
+    }
+    .orbit-ring.inactive {
+      opacity: .28;
+    }
+    .orbit-marker {
+      fill: #22c55e;
+      stroke: #0b1020;
+      stroke-width: 1.1;
+      transition: opacity .08s linear, r .05s linear, fill .08s linear;
+    }
+    .orbit-marker.inactive {
+      fill: #475569;
+      opacity: .34;
+    }
+    .orbit-marker.ghosted {
+      fill: #a78bfa;
+      opacity: .48;
+    }
+    .orbit-marker.hit-now {
+      fill: #f59e0b;
+      r: 5.2;
+      opacity: 1;
+    }
+    .orbit-label {
+      fill: #cbd5e1;
+      font-size: 9px;
+      font-weight: 700;
+      text-anchor: middle;
+      paint-order: stroke;
+      stroke: #0b1020;
+      stroke-width: 2.2px;
+      stroke-linejoin: round;
+    }
+    .orbit-label.inactive {
+      opacity: .35;
+    }
+    .orbit-playhead {
+      stroke: #f59e0b;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 4px rgba(245,158,11,.55));
+    }
+    .orbit-center {
+      fill: #0f172a;
+      stroke: #475569;
+      stroke-width: 1;
+    }
+    .orbit-beat {
+      fill: #f8fafc;
+      font-size: 22px;
+      font-weight: 800;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+    .orbit-caption {
+      text-align: center;
+      color: var(--muted);
+      font-size: .73rem;
+      margin-top: 2px;
+    }
+
     .tempo-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 72px;
@@ -318,7 +440,29 @@
     </section>
 
     <section class="panel">
-      <div class="board" id="board"></div>
+      <div class="fun-toolbar">
+        <div class="view-switch">
+          <button id="gridViewBtn" class="view-toggle">▦ Grid</button>
+          <button id="orbitViewBtn" class="view-toggle">◎ Orbit</button>
+        </div>
+        <button id="ghostBtn" class="ghost-toggle">👻 GHOST OFF</button>
+      </div>
+
+      <div id="ghostStatus" class="ghost-status">
+        GhostはOFF。ONにすると4小節ごとに1パートずつ音が消えます。
+      </div>
+
+      <div id="gridView" class="view-surface">
+        <div class="board" id="board"></div>
+      </div>
+
+      <div id="orbitView" class="view-surface hidden">
+        <div class="orbit-wrap">
+          <svg id="orbitSvg" class="orbit-svg" viewBox="0 0 300 300" role="img" aria-label="Rhythm orbit visualization"></svg>
+        </div>
+        <div class="orbit-caption">1周 = 1小節。円周の点が各パートの発音位置です。</div>
+      </div>
+
       <div class="legend" id="legend"></div>
       <div class="sync-note">
         1拍12分割で16分音符と3連系を両立。各プリセットはジャンルの典型的な骨格を独立練習向けに単純化しています。
@@ -505,11 +649,26 @@
     const layerCount = document.getElementById("layerCount");
     const patternSelect = document.getElementById("patternSelect");
     const patternInfo = document.getElementById("patternInfo");
+    const gridViewBtn = document.getElementById("gridViewBtn");
+    const orbitViewBtn = document.getElementById("orbitViewBtn");
+    const ghostBtn = document.getElementById("ghostBtn");
+    const ghostStatus = document.getElementById("ghostStatus");
+    const gridView = document.getElementById("gridView");
+    const orbitView = document.getElementById("orbitView");
+    const orbitSvg = document.getElementById("orbitSvg");
 
     const activeParts = new Set(["voice"]);
     const partGainBuses = new Map();
 
     let currentPatternKey = "basic";
+    let currentView = "orbit";
+    let ghostMode = false;
+    const ghostMutedParts = new Set();
+    const visibleGhostMutedParts = new Set();
+    let scheduledBarCount = 0;
+    let renderedBarCount = 0;
+    const ghostUiQueue = [];
+
     let audioCtx = null;
     let running = false;
     let nextStep = 0;
@@ -608,7 +767,187 @@
       patternInfo.textContent = p.description + " 推奨開始BPM: " + p.bpm;
       legend.textContent =
         partDefs.map(part => part.label + ": " + currentEvents(part.key).length + " hits/bar").join(" ／ ");
+
+      buildOrbit();
       updatePartUI();
+    }
+
+    function svgEl(name, attrs = {}) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", name);
+      for (const [key, value] of Object.entries(attrs)) {
+        el.setAttribute(key, String(value));
+      }
+      return el;
+    }
+
+    function buildOrbit() {
+      orbitSvg.innerHTML = "";
+
+      const center = 150;
+      const radii = [58, 82, 106, 130];
+
+      partDefs.forEach((part, index) => {
+        const radius = radii[index];
+
+        const ring = svgEl("circle", {
+          cx: center,
+          cy: center,
+          r: radius,
+          class: "orbit-ring",
+          "data-orbit-ring": part.key
+        });
+        orbitSvg.appendChild(ring);
+
+        for (const step of currentEvents(part.key)) {
+          const angle = (step / STEPS_PER_BAR) * Math.PI * 2 - Math.PI / 2;
+          const x = center + Math.cos(angle) * radius;
+          const y = center + Math.sin(angle) * radius;
+
+          const marker = svgEl("circle", {
+            cx: x.toFixed(2),
+            cy: y.toFixed(2),
+            r: 3.7,
+            class: "orbit-marker",
+            "data-orbit-part": part.key,
+            "data-orbit-step": step
+          });
+          orbitSvg.appendChild(marker);
+        }
+
+        const label = svgEl("text", {
+          x: center,
+          y: center - radius + 11,
+          class: "orbit-label",
+          "data-orbit-label": part.key
+        });
+        label.textContent = part.label;
+        orbitSvg.appendChild(label);
+      });
+
+      const playhead = svgEl("line", {
+        id: "orbitPlayhead",
+        x1: center,
+        y1: center,
+        x2: center,
+        y2: 10,
+        class: "orbit-playhead"
+      });
+      orbitSvg.appendChild(playhead);
+
+      const centerDisc = svgEl("circle", {
+        cx: center,
+        cy: center,
+        r: 23,
+        class: "orbit-center"
+      });
+      orbitSvg.appendChild(centerDisc);
+
+      const beatText = svgEl("text", {
+        id: "orbitBeat",
+        x: center,
+        y: center + 1,
+        class: "orbit-beat"
+      });
+      beatText.textContent = "—";
+      orbitSvg.appendChild(beatText);
+
+      updateOrbitState();
+    }
+
+    function updateOrbitState() {
+      document.querySelectorAll("[data-orbit-part]").forEach(marker => {
+        const key = marker.dataset.orbitPart;
+        marker.classList.toggle("inactive", !activeParts.has(key));
+        marker.classList.toggle("ghosted", visibleGhostMutedParts.has(key));
+      });
+
+      document.querySelectorAll("[data-orbit-ring]").forEach(ring => {
+        ring.classList.toggle("inactive", !activeParts.has(ring.dataset.orbitRing));
+      });
+
+      document.querySelectorAll("[data-orbit-label]").forEach(label => {
+        label.classList.toggle("inactive", !activeParts.has(label.dataset.orbitLabel));
+      });
+    }
+
+    function setView(view) {
+      currentView = view === "grid" ? "grid" : "orbit";
+      const gridActive = currentView === "grid";
+
+      gridView.classList.toggle("hidden", !gridActive);
+      orbitView.classList.toggle("hidden", gridActive);
+      gridViewBtn.classList.toggle("active", gridActive);
+      orbitViewBtn.classList.toggle("active", !gridActive);
+    }
+
+    function resetGhostCycle() {
+      ghostMutedParts.clear();
+      visibleGhostMutedParts.clear();
+      ghostUiQueue.length = 0;
+      scheduledBarCount = 0;
+      renderedBarCount = 0;
+      updateGhostUI();
+      updateOrbitState();
+    }
+
+    function toggleGhostMode() {
+      ghostMode = !ghostMode;
+      resetGhostCycle();
+    }
+
+    function advanceGhost(time) {
+      const activeKeys = partDefs
+        .map(part => part.key)
+        .filter(key => activeParts.has(key));
+
+      if (activeKeys.length <= 1) return;
+
+      const maxMuted = activeKeys.length - 1;
+
+      if (ghostMutedParts.size >= maxMuted) {
+        ghostMutedParts.clear();
+      } else {
+        const preferredOrder = ["right", "left", "foot", "voice"];
+        const next = preferredOrder.find(
+          key => activeParts.has(key) && !ghostMutedParts.has(key)
+        );
+        if (next) ghostMutedParts.add(next);
+      }
+
+      ghostUiQueue.push({
+        time,
+        muted: Array.from(ghostMutedParts)
+      });
+    }
+
+    function updateGhostUI() {
+      ghostBtn.classList.toggle("active", ghostMode);
+      ghostBtn.textContent = ghostMode ? "👻 GHOST ON" : "👻 GHOST OFF";
+
+      if (!ghostMode) {
+        ghostStatus.textContent =
+          "GhostはOFF。ONにすると4小節ごとに1パートずつ音が消えます。";
+        return;
+      }
+
+      if (activeParts.size <= 1) {
+        ghostStatus.textContent =
+          "GHOST待機中：2パート以上を重ねると作動します。";
+        return;
+      }
+
+      const mutedLabels = partDefs
+        .filter(part => visibleGhostMutedParts.has(part.key))
+        .map(part => part.label);
+
+      const barsIntoBlock = renderedBarCount === 0
+        ? 0
+        : (renderedBarCount - 1) % 4;
+      const barsRemaining = 4 - barsIntoBlock;
+
+      ghostStatus.textContent = mutedLabels.length
+        ? "消音中: " + mutedLabels.join(" + ") + " ／ 次の変化まで約" + barsRemaining + "小節"
+        : "全パート聴こえています ／ 約" + barsRemaining + "小節後に1パート消えます";
     }
 
     function ensurePartGainBuses() {
@@ -636,15 +975,22 @@
       if (activeParts.has(key)) activeParts.delete(key);
       else activeParts.add(key);
 
-      setPartBusState(key, activeParts.has(key));
+      for (const part of partDefs) {
+        setPartBusState(part.key, activeParts.has(part.key));
+      }
+      resetGhostCycle();
       updatePartUI();
     }
 
     function addNextPart() {
       const next = partDefs.find(part => !activeParts.has(part.key));
       if (!next) return;
+
       activeParts.add(next.key);
-      setPartBusState(next.key, true);
+      for (const part of partDefs) {
+        setPartBusState(part.key, activeParts.has(part.key));
+      }
+      resetGhostCycle();
       updatePartUI();
     }
 
@@ -655,6 +1001,7 @@
         else activeParts.delete(part.key);
         setPartBusState(part.key, enabled);
       }
+      resetGhostCycle();
       updatePartUI();
     }
 
@@ -673,6 +1020,9 @@
       addLayerBtn.disabled = activeParts.size === partDefs.length;
       addLayerBtn.textContent =
         activeParts.size === partDefs.length ? "✓ 全パートON" : "＋ 次のパートを重ねる";
+
+      updateOrbitState();
+      updateGhostUI();
     }
 
     async function applyPattern(key) {
@@ -714,11 +1064,23 @@
     }
 
     function scheduleStep(step, time) {
+      if (step === 0) {
+        if (ghostMode && scheduledBarCount > 0 && scheduledBarCount % 4 === 0) {
+          advanceGhost(time);
+        }
+        scheduledBarCount += 1;
+      }
+
       for (const part of partDefs) {
-        if (activeParts.has(part.key) && currentEvents(part.key).includes(step)) {
+        if (
+          activeParts.has(part.key) &&
+          !ghostMutedParts.has(part.key) &&
+          currentEvents(part.key).includes(step)
+        ) {
           makeClick(time, part);
         }
       }
+
       visualQueue.push({ step, time });
     }
 
@@ -734,15 +1096,48 @@
 
     function renderStep(step) {
       if (step === shownStep) return;
+
+      if (step === 0) {
+        renderedBarCount += 1;
+        updateGhostUI();
+      }
+
       document.querySelectorAll(".cell.now").forEach(el => el.classList.remove("now"));
       document.querySelectorAll('[data-step="' + step + '"]').forEach(el => el.classList.add("now"));
-      beatDisplay.textContent = String(Math.floor(step / STEPS_PER_BEAT) + 1);
+
+      const beat = String(Math.floor(step / STEPS_PER_BEAT) + 1);
+      beatDisplay.textContent = beat;
+
+      const playhead = document.getElementById("orbitPlayhead");
+      if (playhead) {
+        const angle = (step / STEPS_PER_BAR) * 360;
+        playhead.setAttribute("transform", "rotate(" + angle + " 150 150)");
+      }
+
+      const orbitBeat = document.getElementById("orbitBeat");
+      if (orbitBeat) orbitBeat.textContent = beat;
+
+      document.querySelectorAll(".orbit-marker.hit-now").forEach(marker => {
+        marker.classList.remove("hit-now");
+      });
+      document.querySelectorAll('[data-orbit-step="' + step + '"]').forEach(marker => {
+        marker.classList.add("hit-now");
+      });
+
       shownStep = step;
     }
 
     function visualLoop() {
       if (!running || !audioCtx) return;
       const now = audioCtx.currentTime;
+
+      while (ghostUiQueue.length && ghostUiQueue[0].time <= now) {
+        const event = ghostUiQueue.shift();
+        visibleGhostMutedParts.clear();
+        event.muted.forEach(key => visibleGhostMutedParts.add(key));
+        updateGhostUI();
+        updateOrbitState();
+      }
 
       while (visualQueue.length && visualQueue[0].time <= now) {
         renderStep(visualQueue.shift().step);
@@ -753,8 +1148,20 @@
 
     function clearVisuals() {
       visualQueue.length = 0;
+      ghostUiQueue.length = 0;
       shownStep = -1;
+
       document.querySelectorAll(".cell.now").forEach(el => el.classList.remove("now"));
+      document.querySelectorAll(".orbit-marker.hit-now").forEach(marker => {
+        marker.classList.remove("hit-now");
+      });
+
+      const playhead = document.getElementById("orbitPlayhead");
+      if (playhead) playhead.setAttribute("transform", "rotate(0 150 150)");
+
+      const orbitBeat = document.getElementById("orbitBeat");
+      if (orbitBeat) orbitBeat.textContent = "—";
+
       beatDisplay.textContent = "—";
     }
 
@@ -772,6 +1179,7 @@
       }
 
       ensurePartGainBuses();
+      resetGhostCycle();
       running = true;
       clearVisuals();
 
@@ -803,6 +1211,7 @@
       stopBtn.disabled = true;
       stateText.textContent = "停止中";
       clearVisuals();
+      resetGhostCycle();
     }
 
     bpmRange.addEventListener("input", e => setBpm(e.target.value));
@@ -812,11 +1221,16 @@
     stopBtn.addEventListener("click", stop);
     addLayerBtn.addEventListener("click", addNextPart);
     resetLayerBtn.addEventListener("click", resetToVoice);
+    gridViewBtn.addEventListener("click", () => setView("grid"));
+    orbitViewBtn.addEventListener("click", () => setView("orbit"));
+    ghostBtn.addEventListener("click", toggleGhostMode);
 
     buildPatternSelect();
     buildPartButtons();
     setBpm(currentPattern().bpm);
     buildBoard();
+    setView(currentView);
+    updateGhostUI();
   </script>
 </body>
 </html>
