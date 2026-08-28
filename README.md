@@ -44,3 +44,30 @@
 - アクセント位置の循環
 - 片手だけ休符を入れる独立課題
 - 足だけ裏拍にする課題
+
+
+## Web App
+
+`index.html` にスマホ向けリズム練習アプリがあります。
+
+### 機能
+
+- BPM 40〜180
+- Start / Stop
+- Voice / Right Hand / Left Hand / Foot の4パート
+- 現在位置を24ステップ表示でハイライト
+- Web Audio APIによるクリック音
+- 外部ライブラリ不要
+
+### GitHub Pages
+
+GitHubのリポジトリ画面で:
+
+1. Settings
+2. Pages
+3. Build and deployment
+4. Source を **Deploy from a branch**
+5. Branch を **main / root**
+6. Save
+
+設定後は GitHub Pages のURLからスマホで直接使えます。
