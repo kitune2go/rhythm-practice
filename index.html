@@ -203,10 +203,16 @@
     }
     .orbit-beat {
       fill: #f8fafc;
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 800;
       text-anchor: middle;
       dominant-baseline: middle;
+    }
+    .orbit-bar {
+      fill: #94a3b8;
+      font-size: 9px;
+      font-weight: 700;
+      text-anchor: middle;
     }
     .orbit-caption {
       text-align: center;
@@ -330,12 +336,30 @@
     }
     .beat-ruler {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(var(--pulse-count, 1), minmax(0, 1fr));
       gap: 2px;
       text-align: center;
       color: #cbd5e1;
       font-size: .72rem;
       font-weight: 700;
+    }
+    .bar-block {
+      width: 100%;
+      min-width: 0;
+    }
+    .bar-block + .bar-block {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(148,163,184,.24);
+    }
+    .bar-heading {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: .7rem;
+      font-variant-numeric: tabular-nums;
     }
     .part-row + .part-row { margin-top: 7px; }
     .part-label {
@@ -349,8 +373,10 @@
     }
     .steps {
       min-width: 0;
+      width: 100%;
+      overflow: hidden;
       display: grid;
-      grid-template-columns: repeat(48, minmax(0, 1fr));
+      grid-template-columns: repeat(var(--step-count, 1), minmax(0, 1fr));
       gap: 1px;
     }
     .cell {
@@ -361,7 +387,7 @@
       border: 0;
       transition: background .025s linear, transform .025s linear;
     }
-    .cell:nth-child(12n + 1) {
+    .cell.pulse-start {
       box-shadow: inset 2px 0 0 var(--line);
     }
     .cell.event { background: var(--event); }
@@ -482,7 +508,11 @@
       <div class="beat" id="beatDisplay">—</div>
       <div class="status">
         <span id="stateText">停止中</span>
-        <span>4/4 ・ 1小節ループ</span>
+        <span id="meterDisplay"></span>
+      </div>
+      <div class="status pattern-position">
+        <span id="barDisplay">小節 —</span>
+        <span id="pulseDisplay">Pulse —</span>
       </div>
     </section>
 
@@ -507,25 +537,28 @@
         <div class="orbit-wrap">
           <svg id="orbitSvg" class="orbit-svg" viewBox="0 0 300 300" role="img" aria-label="Rhythm orbit visualization"></svg>
         </div>
-        <div class="orbit-caption">1周 = 1小節。円周の点が各パートの発音位置です。</div>
+        <div class="orbit-caption">1周 = 1小節。複数小節Patternでは現在の小節だけを表示します。</div>
       </div>
 
       <div class="legend" id="legend"></div>
       <div class="sync-note">
-        1拍12分割で16分音符と3連系を両立。各プリセットはジャンルの典型的な骨格を独立練習向けに単純化しています。
+        Patternごとに拍子・主要pulse・pulse内分割・小節数を定義します。各プリセットはジャンルの典型的な骨格を独立練習向けに単純化しています。
       </div>
     </section>
   </main>
 
-  <script>
-    const STEPS_PER_BEAT = 12;
-    const STEPS_PER_BAR = 48;
-
-    const Q = [0, 12, 24, 36];
-    const E = [0, 6, 12, 18, 24, 30, 36, 42];
-    const S16 = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45];
-    const TRIPLET8 = [0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44];
-    const SWUNG8 = [0, 8, 12, 20, 24, 32, 36, 44];
+  <script type="module">
+    import {
+      patterns,
+      getStepsPerBar,
+      getTotalSteps,
+      getSecondsPerStep,
+      getBarIndex,
+      getStepWithinBar,
+      getPulseIndex,
+      isBarBoundary,
+      getEventsForBar
+    } from "./pattern-model.mjs";
 
     const partDefs = [
       { key: "voice", label: "Voice", freq: 920, gain: 0.095, duration: 0.030 },
@@ -534,153 +567,6 @@
       { key: "foot", label: "Foot", freq: 150, gain: 0.15, duration: 0.060 }
     ];
 
-    const patterns = {
-      basic: {
-        name: "Basic Independence",
-        family: "基礎",
-        bpm: 60,
-        description: "4分・8分・2拍3連・2分を同時に走らせる基礎独立課題。",
-        events: {
-          voice: Q,
-          right: E,
-          left: [0, 8, 16, 24, 32, 40],
-          foot: [0, 24]
-        }
-      },
-      rock8: {
-        name: "Rock 8-Beat",
-        family: "Rock",
-        bpm: 92,
-        description: "8ビートの骨格。右手8分、左手2・4拍、足1・3拍。",
-        events: {
-          voice: Q,
-          right: E,
-          left: [12, 36],
-          foot: [0, 24]
-        }
-      },
-      funk16: {
-        name: "Funk 16th",
-        family: "Funk",
-        bpm: 84,
-        description: "16分の細かいパルスに、バックビートとシンコペートした足を重ねる。",
-        events: {
-          voice: Q,
-          right: S16,
-          left: [12, 21, 36, 45],
-          foot: [0, 9, 24, 30, 42]
-        }
-      },
-      shuffle: {
-        name: "Shuffle / Blues",
-        family: "Blues",
-        bpm: 90,
-        description: "3連の1個目と3個目を使うシャッフル系の跳ねた8分。",
-        events: {
-          voice: Q,
-          right: SWUNG8,
-          left: [12, 36],
-          foot: [0, 24]
-        }
-      },
-      jazzRide: {
-        name: "Jazz Ride",
-        family: "Jazz",
-        bpm: 120,
-        description: "代表的なライドの骨格。2拍目・4拍目の直前にスキップノートを置く。",
-        events: {
-          voice: Q,
-          right: [0, 12, 20, 24, 36, 44],
-          left: [12, 36],
-          foot: Q
-        }
-      },
-      reggae: {
-        name: "Reggae One-Drop",
-        family: "Reggae",
-        bpm: 76,
-        description: "裏拍を刻み、3拍目に重心を置くOne-Drop型の単純化パターン。",
-        events: {
-          voice: Q,
-          right: [6, 18, 30, 42],
-          left: [24],
-          foot: [24]
-        }
-      },
-      house: {
-        name: "House / Four-on-the-floor",
-        family: "Dance",
-        bpm: 124,
-        description: "足は4つ打ち、右手は裏8分、左手は2・4拍。",
-        events: {
-          voice: Q,
-          right: [6, 18, 30, 42],
-          left: [12, 36],
-          foot: Q
-        }
-      },
-      disco: {
-        name: "Disco 16th",
-        family: "Dance",
-        bpm: 118,
-        description: "4つ打ちの足に16分パルスを重ねるディスコ系の練習骨格。",
-        events: {
-          voice: [6, 18, 30, 42],
-          right: S16,
-          left: [12, 36],
-          foot: Q
-        }
-      },
-      tresillo: {
-        name: "Tresillo 3-3-2",
-        family: "Latin / Afro",
-        bpm: 100,
-        description: "8分単位の3-3-2。ラテン系やポップスにも広く現れる周期。",
-        events: {
-          voice: Q,
-          right: E,
-          left: [0, 18, 36],
-          foot: [0, 24]
-        }
-      },
-      bossa: {
-        name: "Bossa-style",
-        family: "Brazil",
-        bpm: 116,
-        description: "ボサノヴァ系のシンコペーションを独立練習用に簡略化。",
-        events: {
-          voice: Q,
-          right: E,
-          left: [0, 9, 18, 24, 33, 42],
-          foot: [0, 24]
-        }
-      },
-      afro12: {
-        name: "12/8 Cross-Rhythm",
-        family: "Afro / 12-8",
-        bpm: 96,
-        description: "3連系の12/8パルスに、3分割のクロスリズムを重ねる。",
-        events: {
-          voice: Q,
-          right: TRIPLET8,
-          left: [0, 16, 32],
-          foot: Q
-        }
-      },
-      poly32: {
-        name: "3:2 Polyrhythm",
-        family: "Polyrhythm",
-        bpm: 72,
-        description: "1小節を3等分する周期と2等分する周期を同時に維持する。",
-        events: {
-          voice: [0, 24],
-          right: [0, 16, 32],
-          left: Q,
-          foot: [0, 24]
-        }
-      }
-    };
-
     const bpmRange = document.getElementById("bpmRange");
     const bpmNumber = document.getElementById("bpmNumber");
     const bpmLabel = document.getElementById("bpmLabel");
@@ -688,6 +574,9 @@
     const stopBtn = document.getElementById("stopBtn");
     const beatDisplay = document.getElementById("beatDisplay");
     const stateText = document.getElementById("stateText");
+    const meterDisplay = document.getElementById("meterDisplay");
+    const barDisplay = document.getElementById("barDisplay");
+    const pulseDisplay = document.getElementById("pulseDisplay");
     const board = document.getElementById("board");
     const legend = document.getElementById("legend");
     const partButtons = document.getElementById("partButtons");
@@ -727,6 +616,7 @@
     let schedulerId = null;
     let rafId = null;
     let shownStep = -1;
+    let shownBar = -1;
     let starting = false;
     let startGeneration = 0;
 
@@ -878,6 +768,29 @@
       return currentPattern().events[key] || [];
     }
 
+    function pulseUnitLabel(unit) {
+      const labels = {
+        quarter: "4分音符",
+        "dotted-quarter": "付点4分音符",
+        eighth: "8分音符",
+        half: "2分音符"
+      };
+      return labels[unit] || unit;
+    }
+
+    function meterLabel(pattern) {
+      return pattern.meter.numerator + "/" + pattern.meter.denominator;
+    }
+
+    function updatePatternStatus(pattern = currentPattern()) {
+      meterDisplay.textContent = meterLabel(pattern) + " ・ " + pattern.bars + "小節";
+      patternInfo.textContent =
+        pattern.description +
+        " 推奨開始BPM: " + pattern.defaultBpm +
+        "（1拍 = " + pulseUnitLabel(pattern.pulse.unit) +
+        "、" + pattern.pulse.count + " pulse/小節）";
+    }
+
     function clampBpm(value) {
       const n = Number(value);
       if (!Number.isFinite(n)) return 60;
@@ -916,48 +829,86 @@
     }
 
     function buildBoard() {
-      board.innerHTML = `
-        <div class="ruler">
-          <div class="ruler-label">PART</div>
-          <div class="beat-ruler">
-            <span>1</span><span>2</span><span>3</span><span>4</span>
-          </div>
-        </div>
-      `;
+      const pattern = currentPattern();
+      const stepsPerBar = getStepsPerBar(pattern);
+      board.innerHTML = "";
 
-      for (const part of partDefs) {
-        const row = document.createElement("div");
-        row.className = "part-row";
-        row.dataset.partRow = part.key;
+      for (let barIndex = 0; barIndex < pattern.bars; barIndex++) {
+        const barBlock = document.createElement("section");
+        barBlock.className = "bar-block";
+        barBlock.dataset.bar = String(barIndex);
 
-        const label = document.createElement("div");
-        label.className = "part-label";
-        label.textContent = part.label;
+        const heading = document.createElement("div");
+        heading.className = "bar-heading";
+        heading.innerHTML =
+          "<span>Bar " + (barIndex + 1) + " / " + pattern.bars + "</span>" +
+          "<span>" + meterLabel(pattern) + " · " + pattern.pulse.count + " pulse</span>";
+        barBlock.appendChild(heading);
 
-        const steps = document.createElement("div");
-        steps.className = "steps";
-        const events = currentEvents(part.key);
+        const ruler = document.createElement("div");
+        ruler.className = "ruler";
+        const rulerLabel = document.createElement("div");
+        rulerLabel.className = "ruler-label";
+        rulerLabel.textContent = "PART";
 
-        for (let step = 0; step < STEPS_PER_BAR; step++) {
-          const cell = document.createElement("div");
-          cell.className = "cell";
-          if (events.includes(step)) cell.classList.add("event");
-          cell.dataset.step = String(step);
-          cell.dataset.part = part.key;
-          steps.appendChild(cell);
+        const pulseRuler = document.createElement("div");
+        pulseRuler.className = "beat-ruler";
+        pulseRuler.style.setProperty("--pulse-count", String(pattern.pulse.count));
+        for (let pulse = 0; pulse < pattern.pulse.count; pulse++) {
+          const label = document.createElement("span");
+          label.textContent = String(pulse + 1);
+          pulseRuler.appendChild(label);
         }
 
-        row.appendChild(label);
-        row.appendChild(steps);
-        board.appendChild(row);
+        ruler.appendChild(rulerLabel);
+        ruler.appendChild(pulseRuler);
+        barBlock.appendChild(ruler);
+
+        for (const part of partDefs) {
+          const row = document.createElement("div");
+          row.className = "part-row";
+          row.dataset.partRow = part.key;
+
+          const label = document.createElement("div");
+          label.className = "part-label";
+          label.textContent = part.label;
+
+          const steps = document.createElement("div");
+          steps.className = "steps";
+          steps.style.setProperty("--step-count", String(stepsPerBar));
+          const events = new Set(currentEvents(part.key));
+          const barStart = barIndex * stepsPerBar;
+
+          for (let stepInBar = 0; stepInBar < stepsPerBar; stepInBar++) {
+            const absoluteStep = barStart + stepInBar;
+            const cell = document.createElement("div");
+            cell.className = "cell";
+            if (stepInBar % pattern.subdivisionsPerPulse === 0) cell.classList.add("pulse-start");
+            if (events.has(absoluteStep)) cell.classList.add("event");
+            cell.dataset.step = String(absoluteStep);
+            cell.dataset.part = part.key;
+            steps.appendChild(cell);
+          }
+
+          row.appendChild(label);
+          row.appendChild(steps);
+          barBlock.appendChild(row);
+        }
+
+        board.appendChild(barBlock);
       }
 
-      const p = currentPattern();
-      patternInfo.textContent = p.description + " 推奨開始BPM: " + p.bpm;
+      updatePatternStatus(pattern);
       legend.textContent =
-        partDefs.map(part => part.label + ": " + currentEvents(part.key).length + " hits/bar").join(" ／ ");
+        partDefs
+          .map(part => part.label + ": " + currentEvents(part.key).length + " hits/" + pattern.bars + " bar")
+          .join(" ／ ");
 
-      buildOrbit();
+      shownBar = -1;
+      buildOrbit(0);
+      barDisplay.textContent = "小節 1 / " + pattern.bars;
+      pulseDisplay.textContent =
+        "Pulse 1 / " + pattern.pulse.count + "（" + pulseUnitLabel(pattern.pulse.unit) + "）";
       updatePartUI();
     }
 
@@ -969,9 +920,12 @@
       return el;
     }
 
-    function buildOrbit() {
+    function buildOrbit(barIndex = 0) {
       orbitSvg.innerHTML = "";
 
+      const pattern = currentPattern();
+      const stepsPerBar = getStepsPerBar(pattern);
+      const safeBarIndex = Math.max(0, Math.min(pattern.bars - 1, barIndex));
       const center = 150;
       const radii = [58, 82, 106, 130];
 
@@ -987,8 +941,9 @@
         });
         orbitSvg.appendChild(ring);
 
-        for (const step of currentEvents(part.key)) {
-          const angle = (step / STEPS_PER_BAR) * Math.PI * 2 - Math.PI / 2;
+        for (const step of getEventsForBar(pattern, part.key, safeBarIndex)) {
+          const stepInBar = getStepWithinBar(pattern, step);
+          const angle = (stepInBar / stepsPerBar) * Math.PI * 2 - Math.PI / 2;
           const x = center + Math.cos(angle) * radius;
           const y = center + Math.sin(angle) * radius;
 
@@ -1026,7 +981,7 @@
       const centerDisc = svgEl("circle", {
         cx: center,
         cy: center,
-        r: 23,
+        r: 28,
         class: "orbit-center"
       });
       orbitSvg.appendChild(centerDisc);
@@ -1034,11 +989,20 @@
       const beatText = svgEl("text", {
         id: "orbitBeat",
         x: center,
-        y: center + 1,
+        y: center - 5,
         class: "orbit-beat"
       });
       beatText.textContent = "—";
       orbitSvg.appendChild(beatText);
+
+      const barText = svgEl("text", {
+        id: "orbitBar",
+        x: center,
+        y: center + 16,
+        class: "orbit-bar"
+      });
+      barText.textContent = "BAR " + (safeBarIndex + 1) + "/" + pattern.bars;
+      orbitSvg.appendChild(barText);
 
       updateOrbitState();
     }
@@ -1220,7 +1184,7 @@
 
       currentPatternKey = key;
       patternSelect.value = key;
-      setBpm(currentPattern().bpm);
+      setBpm(currentPattern().defaultBpm);
       resetToVoice();
       buildBoard();
 
@@ -1230,7 +1194,7 @@
     }
 
     function secondsPerStep() {
-      return (60 / clampBpm(bpmNumber.value)) / STEPS_PER_BEAT;
+      return getSecondsPerStep(currentPattern(), clampBpm(bpmNumber.value));
     }
 
     function makeClick(time, part) {
@@ -1253,7 +1217,7 @@
     }
 
     function scheduleStep(step, time) {
-      if (step === 0) {
+      if (isBarBoundary(currentPattern(), step)) {
         if (ghostMode && scheduledBarCount > 0 && scheduledBarCount % 4 === 0) {
           advanceGhost(time);
         }
@@ -1279,32 +1243,49 @@
       while (nextNoteTime < audioCtx.currentTime + scheduleAheadSec) {
         scheduleStep(nextStep, nextNoteTime);
         nextNoteTime += secondsPerStep();
-        nextStep = (nextStep + 1) % STEPS_PER_BAR;
+        nextStep = (nextStep + 1) % getTotalSteps(currentPattern());
       }
     }
 
     function renderStep(step) {
       if (step === shownStep) return;
 
-      if (step === 0) {
+      const pattern = currentPattern();
+      const barIndex = getBarIndex(pattern, step);
+      const pulseIndex = getPulseIndex(pattern, step);
+      const stepInBar = getStepWithinBar(pattern, step);
+
+      if (isBarBoundary(pattern, step)) {
         renderedBarCount += 1;
         updateGhostUI();
+      }
+
+      if (barIndex !== shownBar) {
+        buildOrbit(barIndex);
+        shownBar = barIndex;
       }
 
       document.querySelectorAll(".cell.now").forEach(el => el.classList.remove("now"));
       document.querySelectorAll('[data-step="' + step + '"]').forEach(el => el.classList.add("now"));
 
-      const beat = String(Math.floor(step / STEPS_PER_BEAT) + 1);
-      beatDisplay.textContent = beat;
+      const pulse = String(pulseIndex + 1);
+      beatDisplay.textContent = pulse;
+      barDisplay.textContent = "小節 " + (barIndex + 1) + " / " + pattern.bars;
+      pulseDisplay.textContent =
+        "Pulse " + (pulseIndex + 1) + " / " + pattern.pulse.count +
+        "（" + pulseUnitLabel(pattern.pulse.unit) + "）";
 
       const playhead = document.getElementById("orbitPlayhead");
       if (playhead) {
-        const angle = (step / STEPS_PER_BAR) * 360;
+        const angle = (stepInBar / getStepsPerBar(pattern)) * 360;
         playhead.setAttribute("transform", "rotate(" + angle + " 150 150)");
       }
 
       const orbitBeat = document.getElementById("orbitBeat");
-      if (orbitBeat) orbitBeat.textContent = beat;
+      if (orbitBeat) orbitBeat.textContent = pulse;
+
+      const orbitBar = document.getElementById("orbitBar");
+      if (orbitBar) orbitBar.textContent = "BAR " + (barIndex + 1) + "/" + pattern.bars;
 
       document.querySelectorAll(".orbit-marker.hit-now").forEach(marker => {
         marker.classList.remove("hit-now");
@@ -1344,6 +1325,7 @@
       visualQueue.length = 0;
       ghostUiQueue.length = 0;
       shownStep = -1;
+      shownBar = -1;
 
       document.querySelectorAll(".cell.now").forEach(el => el.classList.remove("now"));
       document.querySelectorAll(".orbit-marker.hit-now").forEach(marker => {
@@ -1357,6 +1339,10 @@
       if (orbitBeat) orbitBeat.textContent = "—";
 
       beatDisplay.textContent = "—";
+      const pattern = currentPattern();
+      barDisplay.textContent = "小節 — / " + pattern.bars;
+      pulseDisplay.textContent =
+        "Pulse — / " + pattern.pulse.count + "（" + pulseUnitLabel(pattern.pulse.unit) + "）";
     }
 
     async function start() {
@@ -1450,7 +1436,7 @@
 
     buildPatternSelect();
     buildPartButtons();
-    setBpm(currentPattern().bpm);
+    setBpm(currentPattern().defaultBpm);
     buildBoard();
     setView(currentView);
     setVisualOffset(0);
