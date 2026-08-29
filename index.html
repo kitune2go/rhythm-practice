@@ -378,6 +378,35 @@
       font-size: .79rem;
       line-height: 1.55;
     }
+    .offset-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      margin-top: 5px;
+    }
+    .offset-reset {
+      font-size: 0.72rem;
+      padding: 7px 10px;
+      border-radius: 9px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .offset-hint {
+      margin-top: 6px;
+      font-size: 0.68rem;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .offset-hint b { color: var(--text); font-weight: 700; }
+    .latency-readout {
+      margin-top: 4px;
+      font-size: 0.66rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
     .sync-note {
       margin-top: 6px;
       color: #cbd5e1;
@@ -413,6 +442,24 @@
           <input id="bpmRange" type="range" min="40" max="200" value="60" />
           <input id="bpmNumber" type="number" min="40" max="200" value="60" />
         </div>
+      </div>
+
+      <div>
+        <div class="status">
+          <span>Visual Offset</span>
+          <span id="offsetLabel">0 ms</span>
+        </div>
+        <div class="offset-row">
+          <input id="offsetRange" type="range" min="-150" max="150" step="5" value="0"
+                 aria-describedby="offsetHint" />
+          <button id="offsetResetBtn" class="offset-reset" type="button">0に戻す</button>
+        </div>
+        <div class="offset-hint" id="offsetHint">
+          映像だけをずらします。音は動きません。
+          <b>＋で映像を遅らせる</b> ／ <b>−で映像を早める</b>。
+          音より映像が先に見えるときは＋側へ。
+        </div>
+        <div class="latency-readout" id="latencyReadout">出力遅延: 未計測</div>
       </div>
 
       <div class="buttons">
@@ -656,6 +703,10 @@
     const gridView = document.getElementById("gridView");
     const orbitView = document.getElementById("orbitView");
     const orbitSvg = document.getElementById("orbitSvg");
+    const offsetRange = document.getElementById("offsetRange");
+    const offsetLabel = document.getElementById("offsetLabel");
+    const offsetResetBtn = document.getElementById("offsetResetBtn");
+    const latencyReadout = document.getElementById("latencyReadout");
 
     const activeParts = new Set(["voice"]);
     const partGainBuses = new Map();
@@ -676,10 +727,148 @@
     let schedulerId = null;
     let rafId = null;
     let shownStep = -1;
+    let starting = false;
+    let startGeneration = 0;
 
     const visualQueue = [];
     const lookaheadMs = 20;
-    const scheduleAheadSec = 0.10;
+    const scheduleAheadSec = 0.20;
+
+    /* ----------------------------------------------------------------------
+       Audio / visual synchronisation.
+
+       Audio is scheduled against audioCtx.currentTime, which is the clock the
+       graph is *writing* to. The speaker is behind that clock: a note handed
+       over at time T is heard at roughly T + outputLatency. Comparing visual
+       events against currentTime therefore lights the grid up before the sound
+       arrives.
+
+       Everything below answers one question — "which context time is the
+       listener hearing right now?" — and nothing else in the file does any
+       latency reasoning.
+       ---------------------------------------------------------------------- */
+
+    let visualOffsetMs = 0;          // user setting; + delays the visuals
+    let smoothedLatencySec = null;   // exponentially smoothed output latency
+    let latencySource = "none";      // which API the current estimate came from
+
+    // Anything outside this is a bad reading, not a real device.
+    const MAX_PLAUSIBLE_LATENCY_SEC = 0.5;
+    // getOutputTimestamp jitters frame to frame; without smoothing the
+    // playhead visibly stutters.
+    const LATENCY_SMOOTHING = 0.1;
+
+    // Preferred source: ask the device which sample frame it is playing.
+    // Returns seconds, or null when the reading is unavailable or implausible.
+    function readTimestampLatency() {
+      if (!audioCtx || typeof audioCtx.getOutputTimestamp !== "function") return null;
+
+      let stamp;
+      try {
+        stamp = audioCtx.getOutputTimestamp();
+      } catch (error) {
+        return null;
+      }
+      if (!stamp) return null;
+
+      const { contextTime, performanceTime } = stamp;
+      if (!Number.isFinite(contextTime) || !Number.isFinite(performanceTime)) return null;
+      // Browsers report 0 until the device has actually started rendering.
+      if (contextTime <= 0) return null;
+
+      // The stamp describes a moment slightly in the past; carry it forward.
+      const sinceStampSec = (performance.now() - performanceTime) / 1000;
+      if (!Number.isFinite(sinceStampSec) || sinceStampSec < 0 || sinceStampSec > 1) return null;
+
+      const latency = audioCtx.currentTime - (contextTime + sinceStampSec);
+      if (!Number.isFinite(latency) || latency < 0 || latency > MAX_PLAUSIBLE_LATENCY_SEC) return null;
+      return latency;
+    }
+
+    function plausibleLatency(value) {
+      return Number.isFinite(value) && value > 0 && value <= MAX_PLAUSIBLE_LATENCY_SEC;
+    }
+
+    // Prefer getOutputTimestamp: it is the measured end-to-end device position,
+    // so baseLatency/outputLatency must never be added to that measurement.
+    // Only the fallback path composes the two distinct latency stages.
+    function getOutputLatencyEstimate() {
+      const measured = readTimestampLatency();
+      if (measured !== null) return { seconds: measured, source: "getOutputTimestamp" };
+
+      if (!audioCtx) return { seconds: 0, source: "none" };
+
+      const base = plausibleLatency(audioCtx.baseLatency) ? audioCtx.baseLatency : null;
+      const output = plausibleLatency(audioCtx.outputLatency) ? audioCtx.outputLatency : null;
+
+      if (base !== null && output !== null) {
+        const combined = base + output;
+        if (plausibleLatency(combined)) {
+          return { seconds: combined, source: "baseLatency + outputLatency" };
+        }
+        return { seconds: 0, source: "none" };
+      }
+      if (output !== null) {
+        return { seconds: output, source: "outputLatency" };
+      }
+      if (base !== null) {
+        return { seconds: base, source: "baseLatency" };
+      }
+      return { seconds: 0, source: "none" };
+    }
+
+    function updateLatencyEstimate() {
+      const estimate = getOutputLatencyEstimate();
+      latencySource = estimate.source;
+      smoothedLatencySec = smoothedLatencySec === null
+        ? estimate.seconds
+        : smoothedLatencySec + (estimate.seconds - smoothedLatencySec) * LATENCY_SMOOTHING;
+      return smoothedLatencySec;
+    }
+
+    function getEffectiveVisualOffset() {
+      return visualOffsetMs / 1000;
+    }
+
+    // The context time whose audio the listener is hearing right now, shifted
+    // by the user's offset. A visual event fires when its scheduled time has
+    // been reached on THIS clock, not on audioCtx.currentTime.
+    //
+    // Subtracting the offset means a positive offset moves the clock backwards,
+    // so events fire later — "+ delays the visuals", as the UI says.
+    function getVisualClockTime() {
+      if (!audioCtx) return 0;
+      return audioCtx.currentTime - updateLatencyEstimate() - getEffectiveVisualOffset();
+    }
+
+    function formatOffset(ms) {
+      return (ms > 0 ? "+" : "") + ms + " ms";
+    }
+
+    function setVisualOffset(value) {
+      const ms = Number(value);
+      visualOffsetMs = Number.isFinite(ms) ? Math.min(150, Math.max(-150, Math.round(ms / 5) * 5)) : 0;
+      offsetRange.value = String(visualOffsetMs);
+      offsetLabel.textContent = formatOffset(visualOffsetMs);
+    }
+
+    const latencySourceLabels = {
+      getOutputTimestamp: "getOutputTimestamp",
+      "baseLatency + outputLatency": "baseLatency + outputLatency",
+      outputLatency: "outputLatency",
+      baseLatency: "baseLatency",
+      none: "取得不可（補正なし）"
+    };
+
+    function updateLatencyReadout() {
+      if (!audioCtx || smoothedLatencySec === null) {
+        latencyReadout.textContent = "出力遅延: 未計測";
+        return;
+      }
+      latencyReadout.textContent =
+        "出力遅延: 約" + Math.round(smoothedLatencySec * 1000) + " ms（" +
+        (latencySourceLabels[latencySource] || latencySource) + "）";
+    }
 
     function currentPattern() {
       return patterns[currentPatternKey];
@@ -1129,9 +1318,13 @@
 
     function visualLoop() {
       if (!running || !audioCtx) return;
-      const now = audioCtx.currentTime;
 
-      while (ghostUiQueue.length && ghostUiQueue[0].time <= now) {
+      // Sampled once and shared by both queues, so the ghost mute banner and
+      // the step highlight can never drift onto different clocks. Grid and
+      // Orbit are both driven from renderStep, so they inherit it too.
+      const visualNow = getVisualClockTime();
+
+      while (ghostUiQueue.length && ghostUiQueue[0].time <= visualNow) {
         const event = ghostUiQueue.shift();
         visibleGhostMutedParts.clear();
         event.muted.forEach(key => visibleGhostMutedParts.add(key));
@@ -1139,10 +1332,11 @@
         updateOrbitState();
       }
 
-      while (visualQueue.length && visualQueue[0].time <= now) {
+      while (visualQueue.length && visualQueue[0].time <= visualNow) {
         renderStep(visualQueue.shift().step);
       }
 
+      updateLatencyReadout();
       rafId = requestAnimationFrame(visualLoop);
     }
 
@@ -1166,16 +1360,38 @@
     }
 
     async function start() {
-      if (running) return;
+      // running is only set after the await below, so two taps landing inside
+      // the resume() window would both get past a `running` check and leave two
+      // schedulers and two rAF loops behind. Claim the start synchronously.
+      if (running || starting) return;
+      starting = true;
+      startBtn.disabled = true;
 
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-          latencyHint: "interactive"
-        });
+      const attempt = ++startGeneration;
+
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+            latencyHint: "interactive"
+          });
+        }
+
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+      } catch (error) {
+        starting = false;
+        startBtn.disabled = false;
+        stateText.textContent = "音声を開始できませんでした";
+        return;
       }
 
-      if (audioCtx.state === "suspended") {
-        await audioCtx.resume();
+      starting = false;
+
+      // A stop() landing during the await wins: it bumped the generation.
+      if (attempt !== startGeneration) {
+        startBtn.disabled = running;
+        return;
       }
 
       ensurePartGainBuses();
@@ -1183,10 +1399,10 @@
       running = true;
       clearVisuals();
 
+      smoothedLatencySec = null;
       nextStep = 0;
       nextNoteTime = audioCtx.currentTime + 0.08;
 
-      startBtn.disabled = true;
       stopBtn.disabled = false;
       stateText.textContent = "再生中";
 
@@ -1197,6 +1413,9 @@
 
     function stop() {
       running = false;
+      starting = false;
+      // Invalidates any start() still sitting in its await.
+      startGeneration += 1;
 
       if (schedulerId !== null) {
         clearInterval(schedulerId);
@@ -1212,6 +1431,8 @@
       stateText.textContent = "停止中";
       clearVisuals();
       resetGhostCycle();
+      smoothedLatencySec = null;
+      updateLatencyReadout();
     }
 
     bpmRange.addEventListener("input", e => setBpm(e.target.value));
@@ -1224,13 +1445,17 @@
     gridViewBtn.addEventListener("click", () => setView("grid"));
     orbitViewBtn.addEventListener("click", () => setView("orbit"));
     ghostBtn.addEventListener("click", toggleGhostMode);
+    offsetRange.addEventListener("input", e => setVisualOffset(e.target.value));
+    offsetResetBtn.addEventListener("click", () => setVisualOffset(0));
 
     buildPatternSelect();
     buildPartButtons();
     setBpm(currentPattern().bpm);
     buildBoard();
     setView(currentView);
+    setVisualOffset(0);
     updateGhostUI();
+    updateLatencyReadout();
   </script>
 </body>
 </html>
