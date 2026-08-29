@@ -789,18 +789,30 @@
       return Number.isFinite(value) && value > 0 && value <= MAX_PLAUSIBLE_LATENCY_SEC;
     }
 
-    // getOutputTimestamp first; outputLatency and baseLatency are fallbacks,
-    // not additions to it. Falls all the way through to zero, which reproduces
-    // the previous behaviour on a browser that exposes none of them.
+    // Prefer getOutputTimestamp: it is the measured end-to-end device position,
+    // so baseLatency/outputLatency must never be added to that measurement.
+    // Only the fallback path composes the two distinct latency stages.
     function getOutputLatencyEstimate() {
       const measured = readTimestampLatency();
       if (measured !== null) return { seconds: measured, source: "getOutputTimestamp" };
 
-      if (audioCtx && plausibleLatency(audioCtx.outputLatency)) {
-        return { seconds: audioCtx.outputLatency, source: "outputLatency" };
+      if (!audioCtx) return { seconds: 0, source: "none" };
+
+      const base = plausibleLatency(audioCtx.baseLatency) ? audioCtx.baseLatency : null;
+      const output = plausibleLatency(audioCtx.outputLatency) ? audioCtx.outputLatency : null;
+
+      if (base !== null && output !== null) {
+        const combined = base + output;
+        if (plausibleLatency(combined)) {
+          return { seconds: combined, source: "baseLatency + outputLatency" };
+        }
+        return { seconds: 0, source: "none" };
       }
-      if (audioCtx && plausibleLatency(audioCtx.baseLatency)) {
-        return { seconds: audioCtx.baseLatency, source: "baseLatency" };
+      if (output !== null) {
+        return { seconds: output, source: "outputLatency" };
+      }
+      if (base !== null) {
+        return { seconds: base, source: "baseLatency" };
       }
       return { seconds: 0, source: "none" };
     }
@@ -842,6 +854,7 @@
 
     const latencySourceLabels = {
       getOutputTimestamp: "getOutputTimestamp",
+      "baseLatency + outputLatency": "baseLatency + outputLatency",
       outputLatency: "outputLatency",
       baseLatency: "baseLatency",
       none: "取得不可（補正なし）"
