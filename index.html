@@ -176,6 +176,12 @@
       stroke: #f59e0b;
       stroke-width: 2.4;
     }
+    .orbit-marker.note-ghost {
+      fill: transparent;
+      stroke: #c084fc;
+      stroke-width: 1.8;
+      stroke-dasharray: 2.2 1.6;
+    }
     .orbit-marker.hit-now {
       fill: #f59e0b;
       r: 5.2;
@@ -402,6 +408,10 @@
       outline: 2px solid #f59e0b;
       outline-offset: -2px;
     }
+    .cell.event.note-ghost {
+      border: 1px dashed #c084fc;
+      background-image: radial-gradient(circle at center, rgba(192,132,252,.5) 0 32%, transparent 34%);
+    }
     .cell.now {
       outline: 2px solid var(--now);
       outline-offset: -1px;
@@ -553,7 +563,7 @@
 
       <div class="legend" id="legend"></div>
       <div class="sync-note">
-        Patternごとに拍子・主要pulse・pulse内分割・小節数を定義します。eventのvelocity / accentは発音時刻を変えず、音量表現だけに反映します。
+        Patternごとに拍子・主要pulse・pulse内分割・小節数を定義します。velocity / accent / ghost noteは発音時刻を変えず、expressionとして扱います。
       </div>
     </section>
   </main>
@@ -572,6 +582,7 @@
       getEventStep,
       getEventVelocity,
       isEventAccented,
+      isEventGhostNote,
       getEffectiveEventGain,
       getEventAtStep
     } from "./pattern-model.mjs";
@@ -908,6 +919,7 @@
               const velocity = getEventVelocity(event);
               cell.classList.add("event");
               cell.classList.toggle("accent", isEventAccented(event));
+              cell.classList.toggle("note-ghost", isEventGhostNote(event));
               cell.style.setProperty("--event-opacity", String(0.55 + velocity * 0.45));
               cell.dataset.velocity = String(velocity);
             }
@@ -980,7 +992,10 @@
             cx: x.toFixed(2),
             cy: y.toFixed(2),
             r: (3.7 * (0.8 + velocity * 0.2)).toFixed(2),
-            class: "orbit-marker" + (isEventAccented(event) ? " accent" : ""),
+            class:
+              "orbit-marker" +
+              (isEventAccented(event) ? " accent" : "") +
+              (isEventGhostNote(event) ? " note-ghost" : ""),
             opacity: (0.55 + velocity * 0.45).toFixed(2),
             "data-orbit-part": part.key,
             "data-orbit-step": step,
@@ -1232,6 +1247,11 @@
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       const peakGain = getEffectiveEventGain(part.gain, event);
+
+      // Web Audio exponential ramps require strictly positive target values.
+      // velocity=0 is a valid silent event: keep it in the visual/timing model,
+      // but do not instantiate an oscillator whose envelope would target zero.
+      if (peakGain <= 0) return;
 
       osc.type = part.key === "foot" ? "sine" : "triangle";
       osc.frequency.setValueAtTime(part.freq, time);
