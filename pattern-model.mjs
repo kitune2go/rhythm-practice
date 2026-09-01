@@ -8,6 +8,7 @@ export const DEFAULT_EVENT_VELOCITY = 1;
 export const ACCENT_GAIN_MULTIPLIER = 1.35;
 
 const toEvents = steps => steps.map(step => ({ step }));
+const rhythmEvent = (step, expression = {}) => ({ step, ...expression });
 
 const fourFour = () => ({
   meter: { numerator: 4, denominator: 4 },
@@ -54,7 +55,24 @@ export const patterns = {
     ...fourFour(),
     events: {
       voice: toEvents(Q),
-      right: toEvents(S16),
+      right: [
+        rhythmEvent(0, { accent: true }),
+        rhythmEvent(3, { velocity: 0.42, ghostNote: true }),
+        rhythmEvent(6, { velocity: 0.72 }),
+        rhythmEvent(9, { velocity: 0.46, ghostNote: true }),
+        rhythmEvent(12, { accent: true }),
+        rhythmEvent(15, { velocity: 0.42, ghostNote: true }),
+        rhythmEvent(18, { velocity: 0.72 }),
+        rhythmEvent(21, { velocity: 0.48, ghostNote: true }),
+        rhythmEvent(24, { accent: true }),
+        rhythmEvent(27, { velocity: 0.42, ghostNote: true }),
+        rhythmEvent(30, { velocity: 0.72 }),
+        rhythmEvent(33, { velocity: 0.46, ghostNote: true }),
+        rhythmEvent(36, { accent: true }),
+        rhythmEvent(39, { velocity: 0.42, ghostNote: true }),
+        rhythmEvent(42, { velocity: 0.72 }),
+        rhythmEvent(45, { velocity: 0.48, ghostNote: true })
+      ],
       left: toEvents([12, 21, 36, 45]),
       foot: toEvents([0, 9, 24, 30, 42])
     }
@@ -68,7 +86,16 @@ export const patterns = {
     ...fourFour(),
     events: {
       voice: toEvents(Q),
-      right: toEvents(SWUNG8),
+      right: [
+        rhythmEvent(0, { accent: true }),
+        rhythmEvent(8, { velocity: 0.68 }),
+        rhythmEvent(12, { accent: true }),
+        rhythmEvent(20, { velocity: 0.68 }),
+        rhythmEvent(24, { accent: true }),
+        rhythmEvent(32, { velocity: 0.68 }),
+        rhythmEvent(36, { accent: true }),
+        rhythmEvent(44, { velocity: 0.68 })
+      ],
       left: toEvents([12, 36]),
       foot: toEvents([0, 24])
     }
@@ -82,7 +109,14 @@ export const patterns = {
     ...fourFour(),
     events: {
       voice: toEvents(Q),
-      right: toEvents([0, 12, 20, 24, 36, 44]),
+      right: [
+        rhythmEvent(0, { velocity: 0.92, accent: true }),
+        rhythmEvent(12, { velocity: 0.88 }),
+        rhythmEvent(20, { velocity: 0.58 }),
+        rhythmEvent(24, { velocity: 0.92, accent: true }),
+        rhythmEvent(36, { velocity: 0.88 }),
+        rhythmEvent(44, { velocity: 0.58 })
+      ],
       left: toEvents([12, 36]),
       foot: toEvents(Q)
     }
@@ -197,20 +231,46 @@ export const patterns = {
   }
 };
 
+export function normalizeEvent(event) {
+  if (typeof event === "number") {
+    return {
+      step: event,
+      velocity: DEFAULT_EVENT_VELOCITY,
+      accent: false,
+      ghostNote: false
+    };
+  }
+
+  if (!event || typeof event !== "object" || Array.isArray(event)) return null;
+
+  return {
+    step: event.step,
+    velocity: event.velocity ?? DEFAULT_EVENT_VELOCITY,
+    accent: event.accent ?? false,
+    ghostNote: event.ghostNote ?? false
+  };
+}
+
 export function getEventStep(event) {
-  return event.step;
+  return normalizeEvent(event)?.step;
 }
 
 export function getEventVelocity(event) {
-  return event.velocity ?? DEFAULT_EVENT_VELOCITY;
+  return normalizeEvent(event)?.velocity;
 }
 
 export function isEventAccented(event) {
-  return event.accent ?? false;
+  return normalizeEvent(event)?.accent ?? false;
+}
+
+export function isEventGhostNote(event) {
+  return normalizeEvent(event)?.ghostNote ?? false;
 }
 
 export function getEventGainMultiplier(event) {
-  return getEventVelocity(event) * (isEventAccented(event) ? ACCENT_GAIN_MULTIPLIER : 1);
+  const normalized = normalizeEvent(event);
+  if (!normalized) return 0;
+  return normalized.velocity * (normalized.accent ? ACCENT_GAIN_MULTIPLIER : 1);
 }
 
 export function getEffectiveEventGain(baseGain, event) {
@@ -219,7 +279,8 @@ export function getEffectiveEventGain(baseGain, event) {
 }
 
 export function getEventAtStep(pattern, partKey, step) {
-  return (pattern.events[partKey] || []).find(event => getEventStep(event) === step) || null;
+  const event = (pattern.events[partKey] || []).find(candidate => getEventStep(candidate) === step);
+  return event === undefined ? null : normalizeEvent(event);
 }
 
 export function getStepsPerBar(pattern) {
@@ -264,10 +325,9 @@ export function getEventsForBar(pattern, partKey, barIndex) {
   const stepsPerBar = getStepsPerBar(pattern);
   const start = barIndex * stepsPerBar;
   const end = start + stepsPerBar;
-  return (pattern.events[partKey] || []).filter(event => {
-    const step = getEventStep(event);
-    return step >= start && step < end;
-  });
+  return (pattern.events[partKey] || [])
+    .map(normalizeEvent)
+    .filter(event => event && event.step >= start && event.step < end);
 }
 
 export function validatePattern(pattern) {
@@ -319,9 +379,10 @@ export function validatePattern(pattern) {
         continue;
       }
       const seen = new Set();
-      for (const event of eventSteps) {
-        if (!event || typeof event !== "object" || Array.isArray(event)) {
-          errors.push(`events.${partKey} contains non-object event`);
+      for (const rawEvent of eventSteps) {
+        const event = normalizeEvent(rawEvent);
+        if (!event) {
+          errors.push(`events.${partKey} contains unsupported event value`);
           continue;
         }
 
@@ -335,16 +396,18 @@ export function validatePattern(pattern) {
           seen.add(step);
         }
 
-        if (event.velocity !== undefined) {
-          if (!Number.isFinite(event.velocity)) {
-            errors.push(`events.${partKey} step ${step} velocity must be finite`);
-          } else if (event.velocity <= 0 || event.velocity > 1) {
-            errors.push(`events.${partKey} step ${step} velocity must satisfy 0 < velocity <= 1`);
-          }
+        if (!Number.isFinite(event.velocity)) {
+          errors.push(`events.${partKey} step ${step} velocity must be finite`);
+        } else if (event.velocity < 0 || event.velocity > 1) {
+          errors.push(`events.${partKey} step ${step} velocity must satisfy 0 <= velocity <= 1`);
         }
 
-        if (event.accent !== undefined && typeof event.accent !== "boolean") {
+        if (typeof event.accent !== "boolean") {
           errors.push(`events.${partKey} step ${step} accent must be boolean`);
+        }
+
+        if (typeof event.ghostNote !== "boolean") {
+          errors.push(`events.${partKey} step ${step} ghostNote must be boolean`);
         }
       }
     }
