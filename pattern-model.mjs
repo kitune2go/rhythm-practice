@@ -245,9 +245,9 @@ export function normalizeEvent(event) {
 
   return {
     step: event.step,
-    velocity: event.velocity ?? DEFAULT_EVENT_VELOCITY,
-    accent: event.accent ?? false,
-    ghostNote: event.ghostNote ?? false
+    velocity: event.velocity === undefined ? DEFAULT_EVENT_VELOCITY : event.velocity,
+    accent: event.accent === undefined ? false : event.accent,
+    ghostNote: event.ghostNote === undefined ? false : event.ghostNote
   };
 }
 
