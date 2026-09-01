@@ -184,6 +184,22 @@ test("velocity zero is valid, silent, and accent remains bounded", () => {
   }
 });
 
+test("explicit null expression values are rejected rather than defaulted", () => {
+  const pattern = fixture({
+    voice: [
+      { step: 0, velocity: null },
+      { step: 12, accent: null },
+      { step: 24, ghostNote: null }
+    ]
+  });
+
+  const errors = validatePattern(pattern);
+
+  assert.ok(errors.some(error => error.includes("step 0 velocity must be finite")));
+  assert.ok(errors.some(error => error.includes("step 12 accent must be boolean")));
+  assert.ok(errors.some(error => error.includes("step 24 ghostNote must be boolean")));
+});
+
 test("validator accepts zero velocity and ghostNote, rejects invalid expression fields", () => {
   const valid = fixture({
     voice: [
