@@ -4,6 +4,11 @@ const S16 = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45];
 const TRIPLET8 = [0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44];
 const SWUNG8 = [0, 8, 12, 20, 24, 32, 36, 44];
 
+export const DEFAULT_EVENT_VELOCITY = 1;
+export const ACCENT_GAIN_MULTIPLIER = 1.35;
+
+const toEvents = steps => steps.map(step => ({ step }));
+
 const fourFour = () => ({
   meter: { numerator: 4, denominator: 4 },
   pulse: { count: 4, unit: "quarter" },
@@ -20,10 +25,10 @@ export const patterns = {
     defaultBpm: 60,
     ...fourFour(),
     events: {
-      voice: Q,
-      right: E,
-      left: [0, 8, 16, 24, 32, 40],
-      foot: [0, 24]
+      voice: toEvents(Q),
+      right: toEvents(E),
+      left: toEvents([0, 8, 16, 24, 32, 40]),
+      foot: toEvents([0, 24])
     }
   },
   rock8: {
@@ -34,10 +39,10 @@ export const patterns = {
     defaultBpm: 92,
     ...fourFour(),
     events: {
-      voice: Q,
-      right: E,
-      left: [12, 36],
-      foot: [0, 24]
+      voice: toEvents(Q),
+      right: toEvents(E),
+      left: toEvents([12, 36]),
+      foot: toEvents([0, 24])
     }
   },
   funk16: {
@@ -48,10 +53,10 @@ export const patterns = {
     defaultBpm: 84,
     ...fourFour(),
     events: {
-      voice: Q,
-      right: S16,
-      left: [12, 21, 36, 45],
-      foot: [0, 9, 24, 30, 42]
+      voice: toEvents(Q),
+      right: toEvents(S16),
+      left: toEvents([12, 21, 36, 45]),
+      foot: toEvents([0, 9, 24, 30, 42])
     }
   },
   shuffle: {
@@ -62,10 +67,10 @@ export const patterns = {
     defaultBpm: 90,
     ...fourFour(),
     events: {
-      voice: Q,
-      right: SWUNG8,
-      left: [12, 36],
-      foot: [0, 24]
+      voice: toEvents(Q),
+      right: toEvents(SWUNG8),
+      left: toEvents([12, 36]),
+      foot: toEvents([0, 24])
     }
   },
   jazzRide: {
@@ -76,10 +81,10 @@ export const patterns = {
     defaultBpm: 120,
     ...fourFour(),
     events: {
-      voice: Q,
-      right: [0, 12, 20, 24, 36, 44],
-      left: [12, 36],
-      foot: Q
+      voice: toEvents(Q),
+      right: toEvents([0, 12, 20, 24, 36, 44]),
+      left: toEvents([12, 36]),
+      foot: toEvents(Q)
     }
   },
   reggae: {
@@ -90,10 +95,10 @@ export const patterns = {
     defaultBpm: 76,
     ...fourFour(),
     events: {
-      voice: Q,
-      right: [6, 18, 30, 42],
-      left: [24],
-      foot: [24]
+      voice: toEvents(Q),
+      right: toEvents([6, 18, 30, 42]),
+      left: toEvents([24]),
+      foot: toEvents([24])
     }
   },
   house: {
@@ -104,10 +109,10 @@ export const patterns = {
     defaultBpm: 124,
     ...fourFour(),
     events: {
-      voice: Q,
-      right: [6, 18, 30, 42],
-      left: [12, 36],
-      foot: Q
+      voice: toEvents(Q),
+      right: toEvents([6, 18, 30, 42]),
+      left: toEvents([12, 36]),
+      foot: toEvents(Q)
     }
   },
   disco: {
@@ -118,10 +123,10 @@ export const patterns = {
     defaultBpm: 118,
     ...fourFour(),
     events: {
-      voice: [6, 18, 30, 42],
-      right: S16,
-      left: [12, 36],
-      foot: Q
+      voice: toEvents([6, 18, 30, 42]),
+      right: toEvents(S16),
+      left: toEvents([12, 36]),
+      foot: toEvents(Q)
     }
   },
   tresillo: {
@@ -132,10 +137,10 @@ export const patterns = {
     defaultBpm: 100,
     ...fourFour(),
     events: {
-      voice: Q,
-      right: E,
-      left: [0, 18, 36],
-      foot: [0, 24]
+      voice: toEvents(Q),
+      right: toEvents(E),
+      left: toEvents([0, 18, 36]),
+      foot: toEvents([0, 24])
     }
   },
   bossa: {
@@ -146,10 +151,10 @@ export const patterns = {
     defaultBpm: 116,
     ...fourFour(),
     events: {
-      voice: Q,
-      right: E,
-      left: [0, 9, 18, 24, 33, 42],
-      foot: [0, 24]
+      voice: toEvents(Q),
+      right: toEvents(E),
+      left: toEvents([0, 9, 18, 24, 33, 42]),
+      foot: toEvents([0, 24])
     }
   },
   afro12: {
@@ -170,10 +175,10 @@ export const patterns = {
     subdivisionsPerPulse: 12,
     bars: 1,
     events: {
-      voice: Q,
-      right: TRIPLET8,
-      left: [0, 16, 32],
-      foot: Q
+      voice: toEvents(Q),
+      right: toEvents(TRIPLET8),
+      left: toEvents([0, 16, 32]),
+      foot: toEvents(Q)
     }
   },
   poly32: {
@@ -184,13 +189,38 @@ export const patterns = {
     defaultBpm: 72,
     ...fourFour(),
     events: {
-      voice: [0, 24],
-      right: [0, 16, 32],
-      left: Q,
-      foot: [0, 24]
+      voice: toEvents([0, 24]),
+      right: toEvents([0, 16, 32]),
+      left: toEvents(Q),
+      foot: toEvents([0, 24])
     }
   }
 };
+
+export function getEventStep(event) {
+  return event.step;
+}
+
+export function getEventVelocity(event) {
+  return event.velocity ?? DEFAULT_EVENT_VELOCITY;
+}
+
+export function isEventAccented(event) {
+  return event.accent ?? false;
+}
+
+export function getEventGainMultiplier(event) {
+  return getEventVelocity(event) * (isEventAccented(event) ? ACCENT_GAIN_MULTIPLIER : 1);
+}
+
+export function getEffectiveEventGain(baseGain, event) {
+  if (!Number.isFinite(baseGain) || baseGain < 0) return 0;
+  return Math.min(1, baseGain * getEventGainMultiplier(event));
+}
+
+export function getEventAtStep(pattern, partKey, step) {
+  return (pattern.events[partKey] || []).find(event => getEventStep(event) === step) || null;
+}
 
 export function getStepsPerBar(pattern) {
   return pattern.pulse.count * pattern.subdivisionsPerPulse;
@@ -234,7 +264,10 @@ export function getEventsForBar(pattern, partKey, barIndex) {
   const stepsPerBar = getStepsPerBar(pattern);
   const start = barIndex * stepsPerBar;
   const end = start + stepsPerBar;
-  return (pattern.events[partKey] || []).filter(step => step >= start && step < end);
+  return (pattern.events[partKey] || []).filter(event => {
+    const step = getEventStep(event);
+    return step >= start && step < end;
+  });
 }
 
 export function validatePattern(pattern) {
@@ -286,15 +319,33 @@ export function validatePattern(pattern) {
         continue;
       }
       const seen = new Set();
-      for (const step of eventSteps) {
-        if (!Number.isInteger(step)) {
-          errors.push(`events.${partKey} contains non-integer step ${step}`);
+      for (const event of eventSteps) {
+        if (!event || typeof event !== "object" || Array.isArray(event)) {
+          errors.push(`events.${partKey} contains non-object event`);
           continue;
         }
-        if (step < 0) errors.push(`events.${partKey} contains negative step ${step}`);
-        if (step >= totalSteps) errors.push(`events.${partKey} step ${step} is outside totalSteps ${totalSteps}`);
-        if (seen.has(step)) errors.push(`events.${partKey} contains duplicate step ${step}`);
-        seen.add(step);
+
+        const step = event.step;
+        if (!Number.isInteger(step)) {
+          errors.push(`events.${partKey} contains non-integer step ${step}`);
+        } else {
+          if (step < 0) errors.push(`events.${partKey} contains negative step ${step}`);
+          if (step >= totalSteps) errors.push(`events.${partKey} step ${step} is outside totalSteps ${totalSteps}`);
+          if (seen.has(step)) errors.push(`events.${partKey} contains duplicate step ${step}`);
+          seen.add(step);
+        }
+
+        if (event.velocity !== undefined) {
+          if (!Number.isFinite(event.velocity)) {
+            errors.push(`events.${partKey} step ${step} velocity must be finite`);
+          } else if (event.velocity <= 0 || event.velocity > 1) {
+            errors.push(`events.${partKey} step ${step} velocity must satisfy 0 < velocity <= 1`);
+          }
+        }
+
+        if (event.accent !== undefined && typeof event.accent !== "boolean") {
+          errors.push(`events.${partKey} step ${step} accent must be boolean`);
+        }
       }
     }
   }
