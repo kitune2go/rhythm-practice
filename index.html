@@ -172,6 +172,10 @@
       fill: #a78bfa;
       opacity: .48;
     }
+    .orbit-marker.accent {
+      stroke: #f59e0b;
+      stroke-width: 2.4;
+    }
     .orbit-marker.hit-now {
       fill: #f59e0b;
       r: 5.2;
@@ -390,7 +394,14 @@
     .cell.pulse-start {
       box-shadow: inset 2px 0 0 var(--line);
     }
-    .cell.event { background: var(--event); }
+    .cell.event {
+      background: var(--event);
+      opacity: var(--event-opacity, 1);
+    }
+    .cell.event.accent {
+      outline: 2px solid #f59e0b;
+      outline-offset: -2px;
+    }
     .cell.now {
       outline: 2px solid var(--now);
       outline-offset: -1px;
@@ -542,7 +553,7 @@
 
       <div class="legend" id="legend"></div>
       <div class="sync-note">
-        Patternごとに拍子・主要pulse・pulse内分割・小節数を定義します。各プリセットはジャンルの典型的な骨格を独立練習向けに単純化しています。
+        Patternごとに拍子・主要pulse・pulse内分割・小節数を定義します。eventのvelocity / accentは発音時刻を変えず、音量表現だけに反映します。
       </div>
     </section>
   </main>
@@ -557,7 +568,12 @@
       getStepWithinBar,
       getPulseIndex,
       isBarBoundary,
-      getEventsForBar
+      getEventsForBar,
+      getEventStep,
+      getEventVelocity,
+      isEventAccented,
+      getEffectiveEventGain,
+      getEventAtStep
     } from "./pattern-model.mjs";
 
     const partDefs = [
@@ -876,7 +892,9 @@
           const steps = document.createElement("div");
           steps.className = "steps";
           steps.style.setProperty("--step-count", String(stepsPerBar));
-          const events = new Set(currentEvents(part.key));
+          const events = new Map(
+            currentEvents(part.key).map(event => [getEventStep(event), event])
+          );
           const barStart = barIndex * stepsPerBar;
 
           for (let stepInBar = 0; stepInBar < stepsPerBar; stepInBar++) {
@@ -884,7 +902,16 @@
             const cell = document.createElement("div");
             cell.className = "cell";
             if (stepInBar % pattern.subdivisionsPerPulse === 0) cell.classList.add("pulse-start");
-            if (events.has(absoluteStep)) cell.classList.add("event");
+
+            const event = events.get(absoluteStep);
+            if (event) {
+              const velocity = getEventVelocity(event);
+              cell.classList.add("event");
+              cell.classList.toggle("accent", isEventAccented(event));
+              cell.style.setProperty("--event-opacity", String(0.55 + velocity * 0.45));
+              cell.dataset.velocity = String(velocity);
+            }
+
             cell.dataset.step = String(absoluteStep);
             cell.dataset.part = part.key;
             steps.appendChild(cell);
@@ -941,7 +968,9 @@
         });
         orbitSvg.appendChild(ring);
 
-        for (const step of getEventsForBar(pattern, part.key, safeBarIndex)) {
+        for (const event of getEventsForBar(pattern, part.key, safeBarIndex)) {
+          const step = getEventStep(event);
+          const velocity = getEventVelocity(event);
           const stepInBar = getStepWithinBar(pattern, step);
           const angle = (stepInBar / stepsPerBar) * Math.PI * 2 - Math.PI / 2;
           const x = center + Math.cos(angle) * radius;
@@ -950,10 +979,12 @@
           const marker = svgEl("circle", {
             cx: x.toFixed(2),
             cy: y.toFixed(2),
-            r: 3.7,
-            class: "orbit-marker",
+            r: (3.7 * (0.8 + velocity * 0.2)).toFixed(2),
+            class: "orbit-marker" + (isEventAccented(event) ? " accent" : ""),
+            opacity: (0.55 + velocity * 0.45).toFixed(2),
             "data-orbit-part": part.key,
-            "data-orbit-step": step
+            "data-orbit-step": step,
+            "data-velocity": velocity
           });
           orbitSvg.appendChild(marker);
         }
@@ -1197,15 +1228,16 @@
       return getSecondsPerStep(currentPattern(), clampBpm(bpmNumber.value));
     }
 
-    function makeClick(time, part) {
+    function makeClick(time, part, event) {
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
+      const peakGain = getEffectiveEventGain(part.gain, event);
 
       osc.type = part.key === "foot" ? "sine" : "triangle";
       osc.frequency.setValueAtTime(part.freq, time);
 
       gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.exponentialRampToValueAtTime(part.gain, time + 0.0025);
+      gain.gain.exponentialRampToValueAtTime(peakGain, time + 0.0025);
       gain.gain.exponentialRampToValueAtTime(0.0001, time + part.duration);
 
       ensurePartGainBuses();
@@ -1225,12 +1257,13 @@
       }
 
       for (const part of partDefs) {
+        const event = getEventAtStep(currentPattern(), part.key, step);
         if (
           activeParts.has(part.key) &&
           !ghostMutedParts.has(part.key) &&
-          currentEvents(part.key).includes(step)
+          event
         ) {
-          makeClick(time, part);
+          makeClick(time, part, event);
         }
       }
 
