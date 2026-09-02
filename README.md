@@ -57,7 +57,8 @@
 - Voice / Right Hand / Left Hand / Foot の4パート
 - 12種類のPatternプリセット（4/4・12/8を含む）
 - Patternごとの meter / BPM基準pulse / subdivisions / bars から内部step数を導出
-- Grid表示（複数小節は小節ごとに分離） / Orbit表示（1周 = 1小節、現在小節を表示）
+- Rhythm eventは整数stepとの後方互換を保ちつつ、`step` と独立した `velocity` / `accent` / `ghostNote` expressionを持てる（発音時刻は変更しない）
+- Grid表示（複数小節は小節ごとに分離） / Orbit表示（1周 = 1小節、現在小節を表示）。velocityは濃淡/markerサイズ、accentは強調枠、ghost noteは専用の点線表現で識別
 - Ghost Mode（実際の小節境界を基準に4小節ごとに変化）
 - Visual Offset（−150〜+150ms）と出力latency補正
 - Web Audio APIによるクリック音

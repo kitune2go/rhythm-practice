@@ -154,7 +154,7 @@ function fixture(overrides = {}) {
     pulse: { count: 4, unit: "quarter" },
     subdivisionsPerPulse: 12,
     bars: 1,
-    events: { voice: [0] },
+    events: { voice: [{ step: 0 }] },
     ...overrides
   };
 }
@@ -201,7 +201,13 @@ test("validator rejects malformed metadata and event positions", () => {
 
   const invalidEvents = fixture({
     events: {
-      voice: [0, 0, -1, 1.5, 48]
+      voice: [
+        { step: 0 },
+        { step: 0 },
+        { step: -1 },
+        { step: 1.5 },
+        { step: 48 }
+      ]
     }
   });
   const eventErrors = validatePattern(invalidEvents);
@@ -233,32 +239,32 @@ test("schema can represent 3/4, 5/4, 6/8, 7/8, and 12/8", () => {
       id: "three-four",
       meter: { numerator: 3, denominator: 4 },
       pulse: { count: 3, unit: "quarter" },
-      events: { voice: [0, 12, 24] }
+      events: { voice: [{ step: 0 }, { step: 12 }, { step: 24 }] }
     }),
     fixture({
       id: "five-four",
       meter: { numerator: 5, denominator: 4 },
       pulse: { count: 5, unit: "quarter" },
-      events: { voice: [0, 12, 24, 36, 48] }
+      events: { voice: [{ step: 0 }, { step: 12 }, { step: 24 }, { step: 36 }, { step: 48 }] }
     }),
     fixture({
       id: "six-eight",
       meter: { numerator: 6, denominator: 8, groups: [3, 3] },
       pulse: { count: 2, unit: "dotted-quarter" },
-      events: { voice: [0, 12] }
+      events: { voice: [{ step: 0 }, { step: 12 }] }
     }),
     fixture({
       id: "seven-eight",
       meter: { numerator: 7, denominator: 8, groups: [2, 2, 3] },
       pulse: { count: 7, unit: "eighth" },
       subdivisionsPerPulse: 4,
-      events: { voice: [0, 8, 16] }
+      events: { voice: [{ step: 0 }, { step: 8 }, { step: 16 }] }
     }),
     fixture({
       id: "twelve-eight",
       meter: { numerator: 12, denominator: 8, groups: [3, 3, 3, 3] },
       pulse: { count: 4, unit: "dotted-quarter" },
-      events: { voice: [0, 12, 24, 36] }
+      events: { voice: [{ step: 0 }, { step: 12 }, { step: 24 }, { step: 36 }] }
     })
   ];
 
@@ -275,8 +281,8 @@ test("two-bar synthetic fixture derives boundaries, wrap, bar index, and Orbit e
     subdivisionsPerPulse: 4,
     bars: 2,
     events: {
-      voice: [0, 27, 28, 55],
-      right: [4, 32]
+      voice: [{ step: 0 }, { step: 27 }, { step: 28 }, { step: 55 }],
+      right: [{ step: 4 }, { step: 32 }]
     }
   });
 
@@ -298,8 +304,8 @@ test("two-bar synthetic fixture derives boundaries, wrap, bar index, and Orbit e
   assert.equal(normalizeStep(pattern, 55 + 1), 0);
   assert.equal(normalizeStep(pattern, -1), 55);
 
-  assert.deepEqual(getEventsForBar(pattern, "voice", 0), [0, 27]);
-  assert.deepEqual(getEventsForBar(pattern, "voice", 1), [28, 55]);
+  assert.deepEqual(getEventsForBar(pattern, "voice", 0).map(event => event.step), [0, 27]);
+  assert.deepEqual(getEventsForBar(pattern, "voice", 1).map(event => event.step), [28, 55]);
 
   let barBoundariesAcrossTwoLoops = 0;
   for (let absoluteStep = 0; absoluteStep < getTotalSteps(pattern) * 2; absoluteStep++) {
@@ -323,7 +329,11 @@ test("legacy 12-pattern scheduler event times are preserved for four loops", () 
     assert.ok(Math.abs(oldSecondsPerStep - newSecondsPerStep) <= EPSILON, id);
 
     for (const [partKey, legacyEvents] of Object.entries(legacy.events)) {
-      assert.deepEqual(pattern.events[partKey], legacyEvents, `${id}/${partKey} event positions`);
+      assert.deepEqual(
+        pattern.events[partKey].map(event => event.step),
+        legacyEvents,
+        `${id}/${partKey} event positions`
+      );
 
       const oldTimes = [];
       const newTimes = [];
@@ -364,7 +374,9 @@ test("main engine paths are pattern-derived and PR #2 timing safeguards remain",
     "getEventsForBar(pattern, part.key, safeBarIndex)",
     "isBarBoundary(currentPattern(), step)",
     "getBarIndex(pattern, step)",
-    "getPulseIndex(pattern, step)"
+    "getPulseIndex(pattern, step)",
+    "getEventAtStep(currentPattern(), part.key, step)",
+    "getEffectiveEventGain(part.gain, event)"
   ]) {
     assert.equal(html.includes(required), true, `missing pattern-derived path: ${required}`);
   }

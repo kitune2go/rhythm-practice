@@ -1,4 +1,4 @@
-name: Pattern schema validation
+name: Rhythm validation
 
 on:
   pull_request:
@@ -17,4 +17,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: node --test tests/pattern-schema.test.mjs
+      - run: node --test
