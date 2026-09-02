@@ -14,6 +14,11 @@
 - `exercises/` : MuseScore等で開ける MusicXML 譜面
 - `logs/` : 練習記録
 - `docs/` : 練習ルール・追加課題
+- `app.mjs` : Web App全体の状態とモジュール接続
+- `core/` : Web Audio・先読みscheduler・表示clock
+- `modes/` : Ghost Modeの状態機械
+- `views/` : Grid / Orbit描画
+- `pattern-model.mjs` : Pattern・Rhythm event・拍子計算
 
 ## Exercise 001
 
@@ -48,7 +53,7 @@
 
 ## Web App
 
-`index.html` にスマホ向けリズム練習アプリがあります。
+`index.html` を入口とするスマホ向けリズム練習アプリがあります。
 
 ### 機能
 
@@ -63,6 +68,19 @@
 - Visual Offset（−150〜+150ms）と出力latency補正
 - Web Audio APIによるクリック音
 - 外部ライブラリ不要
+
+### アーキテクチャ
+
+画面・音声・時刻計算・練習モードを独立したES Modulesへ分離しています。
+詳しい責務と依存方向は [`docs/architecture.md`](docs/architecture.md) を参照してください。
+
+### Validation
+
+Node.js 22以上で、外部パッケージを追加せずに全テストを実行できます。
+
+```bash
+node --test
+```
 
 ### GitHub Pages
 

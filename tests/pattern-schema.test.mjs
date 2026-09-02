@@ -356,7 +356,18 @@ test("legacy 12-pattern scheduler event times are preserved for four loops", () 
 });
 
 test("main engine paths are pattern-derived and PR #2 timing safeguards remain", async () => {
-  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const [html, app, scheduler, visualClock, gridView, orbitView, audioEngine, ghostMode] =
+    await Promise.all([
+      readFile(new URL("../index.html", import.meta.url), "utf8"),
+      readFile(new URL("../app.mjs", import.meta.url), "utf8"),
+      readFile(new URL("../core/scheduler.mjs", import.meta.url), "utf8"),
+      readFile(new URL("../core/visual-clock.mjs", import.meta.url), "utf8"),
+      readFile(new URL("../views/grid-view.mjs", import.meta.url), "utf8"),
+      readFile(new URL("../views/orbit-view.mjs", import.meta.url), "utf8"),
+      readFile(new URL("../core/audio-engine.mjs", import.meta.url), "utf8"),
+      readFile(new URL("../modes/ghost-mode.mjs", import.meta.url), "utf8")
+    ]);
+  const engineSources = [app, scheduler, gridView, orbitView, audioEngine, ghostMode].join("\n");
 
   for (const forbidden of [
     "STEPS_PER_BEAT",
@@ -365,30 +376,30 @@ test("main engine paths are pattern-derived and PR #2 timing safeguards remain",
     "repeat(48",
     "4/4 ・ 1小節ループ"
   ]) {
-    assert.equal(html.includes(forbidden), false, `fixed assumption remains: ${forbidden}`);
+    assert.equal(engineSources.includes(forbidden), false, `fixed assumption remains: ${forbidden}`);
   }
 
   for (const required of [
     "getStepsPerBar(pattern)",
-    "getTotalSteps(currentPattern())",
+    "getTotalSteps(pattern)",
     "getEventsForBar(pattern, part.key, safeBarIndex)",
-    "isBarBoundary(currentPattern(), step)",
+    "isBarBoundary(pattern, step)",
     "getBarIndex(pattern, step)",
     "getPulseIndex(pattern, step)",
-    "getEventAtStep(currentPattern(), part.key, step)",
+    "getEventAtStep(pattern, part.key, step)",
     "getEffectiveEventGain(part.gain, event)"
   ]) {
-    assert.equal(html.includes(required), true, `missing pattern-derived path: ${required}`);
+    assert.equal(engineSources.includes(required), true, `missing pattern-derived path: ${required}`);
   }
 
-  assert.equal(html.includes("const lookaheadMs = 20;"), true);
-  assert.equal(html.includes("const scheduleAheadSec = 0.20;"), true);
+  assert.equal(scheduler.includes("export const LOOKAHEAD_MS = 20;"), true);
+  assert.equal(scheduler.includes("export const SCHEDULE_AHEAD_SEC = 0.20;"), true);
   assert.equal(html.includes('min="-150" max="150"'), true);
-  assert.equal(html.includes('typeof audioCtx.getOutputTimestamp !== "function"'), true);
-  assert.equal(html.includes('source: "baseLatency + outputLatency"'), true);
-  assert.equal(html.includes("if (running || starting) return;"), true);
+  assert.equal(visualClock.includes('typeof audioContext.getOutputTimestamp !== "function"'), true);
+  assert.equal(visualClock.includes('source: "baseLatency + outputLatency"'), true);
+  assert.equal(app.includes("if (running || starting) return;"), true);
 
-  assert.equal(html.includes("const visualNow = getVisualClockTime();"), true);
-  assert.equal(html.includes("ghostUiQueue[0].time <= visualNow"), true);
-  assert.equal(html.includes("visualQueue[0].time <= visualNow"), true);
+  assert.equal(app.includes("const visualNow = visualClock.now();"), true);
+  assert.equal(app.includes("ghostMode.flushVisibleQueue(visualNow)"), true);
+  assert.equal(app.includes("visualQueue[0].time <= visualNow"), true);
 });
