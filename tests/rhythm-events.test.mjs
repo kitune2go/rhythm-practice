@@ -271,35 +271,45 @@ test("Funk, Jazz Ride, and Shuffle rich migration preserves exact steps and sche
 });
 
 test("Grid and Orbit distinguish accent and ghost note without creating a second timing clock", async () => {
-  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const [styles, app, grid, orbit] = await Promise.all([
+    readFile(new URL("../styles.css", import.meta.url), "utf8"),
+    readFile(new URL("../app.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../views/grid-view.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../views/orbit-view.mjs", import.meta.url), "utf8")
+  ]);
 
-  assert.equal(html.includes(".cell.event.accent"), true);
-  assert.equal(html.includes(".cell.event.note-ghost"), true);
-  assert.equal(html.includes(".orbit-marker.accent"), true);
-  assert.equal(html.includes(".orbit-marker.note-ghost"), true);
-  assert.equal(html.includes("--event-opacity"), true);
-  assert.equal(html.includes('"data-velocity": velocity'), true);
+  assert.equal(styles.includes(".cell.event.accent"), true);
+  assert.equal(styles.includes(".cell.event.note-ghost"), true);
+  assert.equal(styles.includes(".orbit-marker.accent"), true);
+  assert.equal(styles.includes(".orbit-marker.note-ghost"), true);
+  assert.equal(grid.includes("--event-opacity"), true);
+  assert.equal(orbit.includes('"data-velocity": velocity'), true);
 
-  assert.equal(html.includes("isEventGhostNote(event)"), true);
-  assert.equal(html.includes("getEventAtStep(currentPattern(), part.key, step)"), true);
-  assert.equal(html.includes("makeClick(time, part, event)"), true);
-  assert.equal(html.includes("getEffectiveEventGain(part.gain, event)"), true);
+  assert.equal(grid.includes("isEventGhostNote(event)"), true);
+  assert.equal(orbit.includes("isEventGhostNote(event)"), true);
+  assert.equal(app.includes("getEventAtStep(pattern, part.key, step)"), true);
+  assert.equal(app.includes("audioEngine.makeClick(time, part, event)"), true);
 
-  assert.equal(html.includes("const visualNow = getVisualClockTime();"), true);
-  assert.equal(html.includes("ghostUiQueue[0].time <= visualNow"), true);
-  assert.equal(html.includes("visualQueue[0].time <= visualNow"), true);
+  assert.equal(app.includes("const visualNow = visualClock.now();"), true);
+  assert.equal(app.includes("ghostMode.flushVisibleQueue(visualNow)"), true);
+  assert.equal(app.includes("visualQueue[0].time <= visualNow"), true);
 });
 
 test("velocity zero is guarded before Web Audio exponential ramps", async () => {
-  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
-  const makeClickStart = html.indexOf("function makeClick(time, part, event)");
-  const scheduleStart = html.indexOf("function scheduleStep", makeClickStart);
-  assert.ok(makeClickStart >= 0 && scheduleStart > makeClickStart);
-  const makeClick = html.slice(makeClickStart, scheduleStart);
+  const audioEngine = await readFile(
+    new URL("../core/audio-engine.mjs", import.meta.url),
+    "utf8"
+  );
+  const makeClickStart = audioEngine.indexOf("function makeClick(time, part, event)");
+  const returnStart = audioEngine.indexOf("return {", makeClickStart);
+  assert.ok(makeClickStart >= 0 && returnStart > makeClickStart);
+  const makeClick = audioEngine.slice(makeClickStart, returnStart);
 
-  const guardIndex = makeClick.indexOf("if (peakGain <= 0) return;");
+  const guardIndex = makeClick.indexOf("if (peakGain <= 0) return false;");
+  const oscillatorIndex = makeClick.indexOf("createOscillator()");
   const rampIndex = makeClick.indexOf("exponentialRampToValueAtTime(peakGain");
   assert.ok(guardIndex >= 0);
+  assert.ok(oscillatorIndex > guardIndex);
   assert.ok(rampIndex > guardIndex);
 });
 
@@ -311,20 +321,35 @@ test("number-event type branching exists only inside normalizeEvent", async () =
 });
 
 test("PR #2 and PR #3 invariants remain present", async () => {
-  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const [html, app, scheduler, visualClock, orbit] = await Promise.all([
+    readFile(new URL("../index.html", import.meta.url), "utf8"),
+    readFile(new URL("../app.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../core/scheduler.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../core/visual-clock.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../views/orbit-view.mjs", import.meta.url), "utf8")
+  ]);
 
-  for (const required of [
+  for (const [source, required] of [
+    [scheduler, "export const LOOKAHEAD_MS = 20;"],
+    [scheduler, "export const SCHEDULE_AHEAD_SEC = 0.20;"],
+    [visualClock, 'source: "getOutputTimestamp"'],
+    [visualClock, 'source: "baseLatency + outputLatency"'],
+    [html, 'min="-150" max="150"'],
+    [app, "if (running || starting) return;"],
+    [scheduler, "getTotalSteps(pattern)"],
+    [app, "isBarBoundary(pattern, step)"],
+    [orbit, "getEventsForBar(pattern, part.key, safeBarIndex)"]
+  ]) {
+    assert.equal(source.includes(required), true, required);
+  }
+
+  for (const obsolete of [
     "const lookaheadMs = 20;",
     "const scheduleAheadSec = 0.20;",
     'source: "getOutputTimestamp"',
-    'source: "baseLatency + outputLatency"',
-    'min="-150" max="150"',
-    "if (running || starting) return;",
-    "getTotalSteps(currentPattern())",
-    "isBarBoundary(currentPattern(), step)",
-    "getEventsForBar(pattern, part.key, safeBarIndex)"
+    "getTotalSteps(currentPattern())"
   ]) {
-    assert.equal(html.includes(required), true, required);
+    assert.equal(html.includes(obsolete), false, `inline engine code remains: ${obsolete}`);
   }
 
   const model = await readFile(new URL("../pattern-model.mjs", import.meta.url), "utf8");

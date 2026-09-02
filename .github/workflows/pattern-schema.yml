@@ -4,7 +4,12 @@ on:
   pull_request:
     paths:
       - "index.html"
+      - "styles.css"
+      - "app.mjs"
       - "pattern-model.mjs"
+      - "core/**"
+      - "modes/**"
+      - "views/**"
       - "tests/**"
       - ".github/workflows/pattern-schema.yml"
   workflow_dispatch:
